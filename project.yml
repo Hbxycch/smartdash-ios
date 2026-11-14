@@ -19,6 +19,8 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     CLANG_ENABLE_MODULES: YES
     SWIFT_OPTIMIZATION_LEVEL: "-Onone"      # Release 下由 configs 覆盖
+    # 高德是 ObjC 静态库：-ObjC 保证 category/分类方法不被裁掉，其余是 SDK 依赖的系统库
+    OTHER_LDFLAGS: "-ObjC -lz -lc++ -lsqlite3"
   configs:
     Debug:
       SWIFT_OPTIMIZATION_LEVEL: "-Onone"
@@ -45,6 +47,8 @@ targets:
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
         SWIFT_EMIT_LOC_STRINGS: NO
+        # ── 高德 SDK 桥接 ──
+        SWIFT_OBJC_BRIDGING_HEADER: Support/SmartDash-Bridging-Header.h
         # 免费个人证书签名时不允许的 capability 不要声明；后台蓝牙/定位已在 Info.plist 里
     info:
       path: Support/Info.plist
@@ -70,6 +74,12 @@ targets:
         NSBluetoothAlwaysUsageDescription: 需要蓝牙与电池保护板（JK-BMS / ANT-BMS）通信，读取总压、电流、单体电压与温度。
         NSBluetoothPeripheralUsageDescription: 需要蓝牙与电池保护板通信。
         NSLocationWhenInUseUsageDescription: 用于显示车速、航向与地图导航。
+        NSLocationAlwaysAndWhenInUseUsageDescription: 导航过程中需要在锁屏或切后台时继续使用定位，否则路线会中断。
+        NSMicrophoneUsageDescription: 语音输入目的地需要麦克风。
+        NSSpeechRecognitionUsageDescription: 把您说出的目的地转成搜索关键词，仅在本机识别。
+        # ── 高德 Key ──
+        # 留空则地图搜索不可用（界面会提示未配置）。CI 会用仓库 Secret AMAP_API_KEY 覆盖。
+        AMapAPIKey: ""
         # ── 后台模式：锁屏/切后台时保持 BLE 与定位 ──
         UIBackgroundModes:
           - bluetooth-central

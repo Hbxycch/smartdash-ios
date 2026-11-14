@@ -22,3 +22,6 @@ Package.resolved
 .vscode/
 .idea/
 *.swp
+
+# CocoaPods
+Pods/

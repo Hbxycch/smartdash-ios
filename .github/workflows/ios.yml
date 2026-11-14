@@ -43,11 +43,21 @@ jobs:
       - name: 生成 Xcode 工程
         run: xcodegen generate
 
+      # 高德 SDK 只能走 CocoaPods，必须在 xcodegen 之后执行（它要 .xcodeproj 才能挂 target）
+      - name: 安装高德 SDK（CocoaPods）
+        run: |
+          if ! command -v pod >/dev/null 2>&1; then
+            sudo gem install cocoapods --no-document
+          fi
+          pod --version
+          pod install --repo-update
+          ls -d SmartDash.xcworkspace
+
       - name: 编译（不签名）
         run: |
           set -o pipefail
           xcodebuild \
-            -project SmartDash.xcodeproj \
+            -workspace SmartDash.xcworkspace \
             -scheme SmartDash \
             -configuration Release \
             -sdk iphoneos \
@@ -57,6 +67,19 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: 注入高德 Key
+        env:
+          AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
+        run: |
+          APP="build/Build/Products/Release-iphoneos/SmartDash.app"
+          if [ -z "${AMAP_API_KEY:-}" ]; then
+            echo "::warning::未配置 Secret AMAP_API_KEY，本次包内地图搜索不可用"
+            exit 0
+          fi
+          /usr/libexec/PlistBuddy -c "Set :AMapAPIKey ${AMAP_API_KEY}" "$APP/Info.plist" \
+            || /usr/libexec/PlistBuddy -c "Add :AMapAPIKey string ${AMAP_API_KEY}" "$APP/Info.plist"
+          echo "已写入 AMapAPIKey（长度 ${#AMAP_API_KEY}）"
 
       - name: 打包 unsigned IPA
         run: |
