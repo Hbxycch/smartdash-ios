@@ -1,0 +1,7 @@
+# 仓库内统一用 LF，避免 Windows 的 autocrlf 把 Swift/YAML 变成 CRLF
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ipa binary
+*.zip binary
