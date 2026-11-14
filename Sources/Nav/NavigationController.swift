@@ -189,7 +189,7 @@ final class DriveAgent: NSObject, AMapNaviDriveManagerDelegate, AMapNaviDriveDat
                                              longitude: CGFloat(to.longitude))
         if !to.id.isEmpty { end.mid = to.id }
 
-        let strategy: AMapNaviDrivingStrategy = motorcycle ? .MotorStrategyMultipleAvoidHighway : .MultipleDefault
+        let strategy: AMapNaviDrivingStrategy = motorcycle ? .MotorStrategyMultipleAvoidHighway : .DrivingStrategyMultipleDefault
         manager.calculateDriveRoute(withStart: start, end: end, wayPOIInfos: nil, drivingStrategy: strategy)
     }
 
@@ -224,7 +224,7 @@ final class DriveAgent: NSObject, AMapNaviDriveManagerDelegate, AMapNaviDriveDat
         onRoute?(summary)
     }
 
-    func driveManager(_ driveManager: AMapNaviDriveManager!, onCalculateRouteFailure error: AMapNaviError!) {
+    func driveManager(_ driveManager: AMapNaviDriveManager, onCalculateRouteFailure error: Error) {
         // 摩托车路网是收费接口，未开通时降级成汽车路网（避开高速），不让用户卡死
         if pendingMode == .motorcycle, !fallbackTried, let start = pendingStart, let dest = pending {
             fallbackTried = true
@@ -279,7 +279,7 @@ final class RideAgent: NSObject, AMapNaviRideManagerDelegate, AMapNaviRideDataRe
                                              longitude: CGFloat(to.longitude))
         if !to.id.isEmpty { end.mid = to.id }
 
-        manager.calculateRideRoute(withStart: start, end: end, strategy: AMapNaviTravelStrategy.MultipleDefault)
+        manager.calculateRideRoute(withStart: start, end: end, strategy: AMapNaviTravelStrategy.multipleDefault)
     }
 
     func start() {
@@ -311,7 +311,7 @@ final class RideAgent: NSObject, AMapNaviRideManagerDelegate, AMapNaviRideDataRe
         onRoute?(summary)
     }
 
-    func rideManager(_ rideManager: AMapNaviRideManager!, onCalculateRouteFailure error: NSError!) {
+    func rideManager(_ rideManager: AMapNaviRideManager, onCalculateRouteFailure error: Error) {
         onFailure?("算路失败，请检查网络后重试")
     }
 

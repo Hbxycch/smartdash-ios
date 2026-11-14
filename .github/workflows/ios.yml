@@ -55,17 +55,13 @@ jobs:
 
       - name: 打印高德 SDK 接口（调试用，验证完删除）
         run: |
-          C=$(find Pods -name "AMapNaviCommonObj.h" | head -1)
-          echo "########## 枚举定义"
-          awk '/AMapNaviDrivingStrategy\)/,/AMapNaviDrivingStrategy;/' "$C" | grep -E "AMapNavi.*=" | head -40
-          awk '/AMapNaviTravelStrategy\)/,/AMapNaviTravelStrategy;/' "$C" | grep -E "AMapNavi.*=" | head -20
-          grep -nE "AMapNaviType\)|AMapNaviTypeGPS|typedef.*AMapNaviType" "$C" | head -10
-          echo "########## 导航启动 / 车辆信息"
-          for f in AMapNaviDriveManager AMapNaviRideManager; do
-            p=$(find Pods -name "$f.h" | head -1)
-            echo "--- $f"
-            grep -nE "startNavi|stopNavi|setVehicleInfo|isUseInternalTTS|naviRoute;" "$p" | head -20
-          done
+          H=Pods/AMapNavi/AMapNaviKit.framework/Headers
+          echo "########## 全库搜 startNavi / stopNavi"
+          grep -rn "startNavi\|stopNavi" $H | grep -v "^\S*: *\*" | head -25
+          echo "########## AMapNaviType 枚举"
+          grep -n "AMapNaviType" $H/AMapNaviCommonObj.h | head -15
+          echo "########## CompositeManager"
+          ls $H | head -40
 
       - name: 编译（不签名）
         run: |
