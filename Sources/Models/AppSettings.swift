@@ -110,7 +110,10 @@ final class AppSettings: ObservableObject {
         headingUp = ud.object(forKey: "map_heading_up") as? Bool ?? true
         locationEnabled = ud.object(forKey: "gps_enabled") as? Bool ?? true
         autoCheckUpdate = ud.object(forKey: "auto_update") as? Bool ?? true
-        updateManifestURL = ud.string(forKey: "update_url") ?? ""
+        // 升级清单出厂预填：清空后回落默认，保证「启动时检查更新」开箱可用
+        let savedURL = ud.string(forKey: "update_url") ?? ""
+        updateManifestURL = savedURL.trimmingCharacters(in: .whitespaces).isEmpty
+            ? CloudSync.Defaults.manifest : savedURL
         btLogEnabled = ud.object(forKey: "bt_log_enabled") as? Bool ?? true
     }
 

@@ -48,10 +48,19 @@ struct DashboardPage: View {
     // MARK: - 左侧：表盘 + 电池 + 信息行
 
     private func gaugeColumn(_ readout: BmsReadout, gaugeHeight: CGFloat) -> some View {
-        VStack(spacing: 10) {
+        let p = settings.palette
+        let snap = service.snapshot
+        return VStack(spacing: 10) {
+            // 码表左上角圆形电量：一眼可见，不用低头看电池卡
             GaugeView(speed: location.speedKmh)
                 .frame(height: gaugeHeight)
                 .frame(maxWidth: .infinity)
+                .overlay(alignment: .topLeading) {
+                    SocRingView(soc: snap.hasData ? readout.soc : nil,
+                                size: 62, palette: p)
+                        .padding(.leading, 6)
+                        .padding(.top, 4)
+                }
 
             batteryCard(readout)
             infoRow
@@ -77,42 +86,32 @@ struct DashboardPage: View {
                     .background(Capsule().fill(p.panelAlt))
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(String(format: "%.0f", r.soc))
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(color)
-                Text("%")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(color.opacity(0.8))
-                if r.socEstimated {
-                    Text("估算")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(p.warn)
-                        .padding(.leading, 4)
-                }
-                Spacer()
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text(r.totalVoltage > 0 ? String(format: "%.2f", r.totalVoltage) : "--")
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundColor(p.textPrimary)
-                    Text("V")
-                        .font(.system(size: 10, weight: .medium))
+            HStack(spacing: 14) {
+                // 圆形电量环：电池模块的主视觉（与电池页、仪表角标同一组件）
+                SocRingView(soc: snap.hasData ? r.soc : nil, size: 68, palette: p)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text(r.totalVoltage > 0 ? String(format: "%.2f", r.totalVoltage) : "--")
+                            .font(.system(size: 20, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundColor(p.textPrimary)
+                        Text("V")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(p.textSecondary)
+                        if r.socEstimated {
+                            Text("SOC 估算")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(p.warn)
+                                .padding(.leading, 6)
+                        }
+                    }
+                    Text("总电压")
+                        .font(.system(size: 9))
                         .foregroundColor(p.textSecondary)
                 }
+                Spacer()
             }
-
-            // 进度条
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(p.track)
-                    Capsule()
-                        .fill(color)
-                        .frame(width: max(4, g.size.width * CGFloat(min(100, max(0, r.soc)) / 100)))
-                }
-            }
-            .frame(height: 5)
 
             Text(BatteryProfile.cellHint(settings.chemistry, settings.series)
                  + String(format: " · 单体 %.3f V", r.cellAvg))

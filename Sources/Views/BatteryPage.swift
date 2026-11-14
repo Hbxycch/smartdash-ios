@@ -51,8 +51,27 @@ struct BatteryPage: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(s.charging ? p.ok : p.accent)
             }
+            // 圆形电量：电池页的主视觉，一眼看出剩余电量（与仪表角标同一组件）
+            HStack(spacing: 16) {
+                SocRingView(soc: s.hasData ? r.soc : nil, size: 96, palette: p)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("电池电量")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(p.textSecondary)
+                    Text(s.hasData
+                         ? (s.charging ? "充电中" : "放电中")
+                         : "未连接")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(s.hasData ? (s.charging ? p.ok : p.accent) : p.textSecondary)
+                    if r.socEstimated {
+                        Text("按开路电压估算")
+                            .font(.system(size: 10))
+                            .foregroundColor(p.warn)
+                    }
+                }
+                Spacer()
+            }
             LazyVGrid(columns: columns, spacing: 10) {
-                metric("电量", String(format: "%.0f%%", r.soc), p.socColor(r.socLevel))
                 metric("总电压", String(format: "%.2f V", r.totalVoltage), p.textPrimary)
                 metric("电流", String(format: "%+.1f A", s.current), s.current >= 0 ? p.ok : p.accent)
                 metric("功率", String(format: "%.0f W", s.powerW), p.textPrimary)

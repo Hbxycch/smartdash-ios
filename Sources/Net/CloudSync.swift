@@ -65,6 +65,15 @@ final class CloudSync: ObservableObject {
         static let trackInterval = "cloud_track_interval"
     }
 
+    // MARK: - 出厂默认值（用户清空后回落，保证开箱即可用）
+
+    public enum Defaults {
+        /// 云同步服务器根地址（不带 /api/v1）
+        public static let server = "https://smartdash-web.w.zood.org:8888"
+        /// OTA 升级清单（启动时检查更新用）
+        public static let manifest = "https://smartdash-web.w.zood.org:8888/ota/version.json"
+    }
+
     // MARK: - 用户可改的配置
 
     @Published var enabled: Bool {
@@ -139,8 +148,12 @@ final class CloudSync: ObservableObject {
 
     init() {
         let d = UserDefaults.standard
-        enabled = d.object(forKey: Key.enabled) as? Bool ?? false
-        baseURL = d.string(forKey: Key.base) ?? ""
+        // 云同步默认打开（v4.11 起）：地址已出厂预填，装上即可上报；
+        // 用户手动关过就以用户为准。地址清空时回落默认。
+        enabled = d.object(forKey: Key.enabled) as? Bool ?? true
+        let savedBase = d.string(forKey: Key.base) ?? ""
+        baseURL = savedBase.trimmingCharacters(in: .whitespaces).isEmpty
+            ? Defaults.server : savedBase
         code = d.string(forKey: Key.code) ?? ""
         token = d.string(forKey: Key.token) ?? ""
         telemetryIntervalS = max(5, d.object(forKey: Key.telInterval) as? Int ?? 10)
@@ -426,7 +439,8 @@ final class CloudSync: ObservableObject {
     @MainActor
     func enroll() async {
         guard enabled else { return }
-        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        // 归一化：大小写/空格/连字符差异在这里抹平（与服务端 enroll 一致）
+        let trimmed = AuthCode.normalize(code)
         let base = normalizedBaseURL
         guard !trimmed.isEmpty, !base.isEmpty else {
             phase = .needConfig

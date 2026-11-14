@@ -14,6 +14,7 @@ struct SettingsPage: View {
     @State private var showConnect = false
     @State private var showLogPreview = false
     @State private var showCrashPreview = false
+    @State private var showScanner = false          // 授权码扫码
 
     var body: some View {
         NavigationStack {
@@ -57,6 +58,12 @@ struct SettingsPage: View {
                 ConnectSheet()
                     .environmentObject(settings)
                     .environmentObject(service)
+            }
+            .sheet(isPresented: $showScanner) {
+                CodeScanSheet { code in
+                    cloud.code = AuthCode.normalize(code)
+                }
+                .ignoresSafeArea()
             }
             .onChange(of: bgPickerItem) { item in
                 guard let item else { return }
@@ -380,9 +387,20 @@ struct SettingsPage: View {
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
 
-                TextField("授权码", text: $cloud.code)
-                    .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
+                HStack(spacing: 10) {
+                    TextField("授权码 XXXXX-XXXXX-XXXXX-XXXXX-XXXXX", text: $cloud.code)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .font(.system(size: 13, design: .monospaced))
+                    // 扫后台「授权码 → 二维码」，识别后自动填入
+                    Button {
+                        showScanner = true
+                    } label: {
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.system(size: 18))
+                    }
+                    .accessibilityLabel("扫码填写授权码")
+                }
 
                 HStack {
                     Text("状态")
@@ -448,7 +466,7 @@ struct SettingsPage: View {
         } header: {
             Text("云同步")
         } footer: {
-            Text("开着蓝牙在路上跑时，每 \(cloud.telemetryIntervalS) 秒从保护板取一个电池点、每 \(cloud.trackIntervalS) 秒取一个轨迹点，先存本机再批量上传。断网会一直攒着，联网后按采集时刻补传，不会丢也不会重复。服务器地址形如 http://192.168.7.252:8081，授权码由后台生成。")
+            Text("开着蓝牙在路上跑时，每 \(cloud.telemetryIntervalS) 秒从保护板取一个电池点、每 \(cloud.trackIntervalS) 秒取一个轨迹点，先存本机再批量上传。断网会一直攒着，联网后按采集时刻补传，不会丢也不会重复。授权码 25 位（5 组 × 5 位，字符集不含 0 1 5 A E I L N O S U Z），后台生成后可扫码或手抄填入，格式差异会自动归一。")
         }
     }
 
