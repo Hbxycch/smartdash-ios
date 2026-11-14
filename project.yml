@@ -5,7 +5,7 @@
 name: SmartDash
 
 options:
-  bundleIdPrefix: com.jkbms
+  bundleIdPrefix: com.smartdash
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -36,10 +36,10 @@ targets:
       - path: Sources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jkbms.monitor.ios
+        PRODUCT_BUNDLE_IDENTIFIER: com.smartdash.monitor.ios
         PRODUCT_NAME: SmartDash
-        MARKETING_VERSION: "4.2"
-        CURRENT_PROJECT_VERSION: "42"
+        MARKETING_VERSION: "4.3"
+        CURRENT_PROJECT_VERSION: "43"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         SUPPORTS_MACCATALYST: NO
