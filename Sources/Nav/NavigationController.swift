@@ -189,7 +189,7 @@ final class DriveAgent: NSObject, AMapNaviDriveManagerDelegate, AMapNaviDriveDat
                                              longitude: CGFloat(to.longitude))
         if !to.id.isEmpty { end.mid = to.id }
 
-        let strategy: AMapNaviDrivingStrategy = motorcycle ? .MotorStrategyMultipleAvoidHighway : .DrivingStrategyMultipleDefault
+        let strategy: AMapNaviDrivingStrategy = motorcycle ? .motorStrategyMultipleAvoidHighway : .drivingStrategyMultipleDefault
         manager.calculateDriveRoute(withStart: start, end: end, wayPOIInfos: nil, drivingStrategy: strategy)
     }
 
