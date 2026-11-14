@@ -194,7 +194,11 @@ final class CloudSync: ObservableObject {
 
     // MARK: - 对外操作
 
+    /// 激活：仅在未激活（token 为空）时可用。
+    /// 已激活时后端会拒绝重复用码（一次性凭证也已被消费），UI 层按钮同步禁用；
+    /// token 失效（上报收到 401/403 会清空 token）后自动恢复可点。
     func activate() {
+        guard !isActivated else { return }
         Task { await enroll() }
     }
 

@@ -442,12 +442,13 @@ struct SettingsPage: View {
                     cloud.activate()
                 } label: {
                     HStack {
-                        Label(cloud.isActivated ? "重新激活" : "用授权码激活", systemImage: "key")
+                        Label(cloud.isActivated ? "已激活（失效后可重新激活）" : "用授权码激活",
+                              systemImage: cloud.isActivated ? "checkmark.seal.fill" : "key")
                         Spacer()
                         if cloud.phase == .enrolling { ProgressView() }
                     }
                 }
-                .disabled(cloud.code.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(cloud.isActivated || cloud.code.trimmingCharacters(in: .whitespaces).isEmpty)
 
                 Button {
                     cloud.uploadNow()
