@@ -89,7 +89,7 @@ SmartDash-iOS/
 ├── project.yml                      XcodeGen 描述（bundle id / 版本号 / Info.plist 权限都在这里）
 ├── .github/workflows/ios.yml        编译 + 打包 unsigned IPA + 打 tag 发 Release
 ├── Sources/
-│   ├── AppMain.swift                入口，注入 4 个环境对象
+│   ├── AppMain.swift                入口，注入 7 个环境对象（设置/蓝牙/定位/升级/导航/收藏/云同步）
 │   ├── Models/
 │   │   ├── BmsSnapshot.swift        实时数据快照（极空/蚂蚁共用）
 │   │   ├── BatteryProfile.swift     化学体系 × 串数 → 电压/SOC 换算
@@ -102,6 +102,10 @@ SmartDash-iOS/
 │   ├── Core/
 │   │   ├── LocationService.swift    GPS 速度/航向/海拔 1Hz
 │   │   └── UpdateChecker.swift      version.json 检查（只提示，不自装）
+│   ├── Net/
+│   │   ├── CloudSync.swift          上位机上报：授权码激活、采样入队、批量上传、退避重试
+│   │   ├── UploadQueue.swift        本地 JSONL 队列（先落盘、成功才删，断网不丢）
+│   │   └── TelemetryMapping.swift   快照 → 接口字段（拿不到的量不传，绝不传 0）
 │   └── Views/
 │       ├── RootView.swift           顶栏 + 页签 + 连接/设置入口
 │       ├── DashboardPage.swift      码表 + 电量电压 + 地图（横竖屏自适应）
@@ -129,5 +133,6 @@ SmartDash-iOS/
 
 - 无 App 图标（`Assets.xcassets` 未建），装上是白底默认图标；要图标就加一个 `AppIcon.appiconset` 并在 `project.yml` 里设 `ASSETCATALOG_COMPILER_APPICON_NAME`。
 - 蚂蚁「自动协议」(`AntAutoProtocol`) 未移植，只支持 FFE0/FFE1 透传的型号。
-- 云端同步/账号体系未做（与 Android 一致，后端尚未落地）。
+- 云端上报：iOS 已能上报（设置 → 云同步，填服务器地址 + 授权码）；**Android 端还没写**。
+- 上报用的是前台 URLSession：锁屏后系统挂起 App，补传要等下次回到前台；要真后台续传需换 background configuration（队列已落盘，不会丢数据）。
 - 真机未联调：协议解析是照 Android 版逐字段搬的，但 iOS 的 BLE 分片大小与 Android 不同，首次接板请开 `Console.app` 看是否 8 秒内进入「数据流」状态。

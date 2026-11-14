@@ -9,6 +9,7 @@ struct RootView: View {
     @EnvironmentObject var updater: UpdateChecker
     @EnvironmentObject var navi: NavigationController
     @EnvironmentObject var favorites: FavoriteStore
+    @EnvironmentObject var cloud: CloudSync
 
     @State private var tab: TabKind = .dashboard
     @State private var showConnect = false
@@ -30,6 +31,7 @@ struct RootView: View {
             tab = settings.startTab
             UIApplication.shared.isIdleTimerDisabled = true
             location.start(enabled: settings.locationEnabled)
+            cloud.start(bms: service, location: location, settings: settings)
             if settings.autoCheckUpdate, !settings.updateManifestURL.isEmpty {
                 updater.check(manifestURL: settings.updateManifestURL,
                               currentBuild: UpdateChecker.currentBuild)
@@ -53,6 +55,7 @@ struct RootView: View {
                 .environmentObject(service)
                 .environmentObject(location)
                 .environmentObject(updater)
+                .environmentObject(cloud)
         }        .alert("发现新版本", isPresented: Binding(
             get: { updater.latest != nil },
             set: { if !$0 { updater.dismiss() } }

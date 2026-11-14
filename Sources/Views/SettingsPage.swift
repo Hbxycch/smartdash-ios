@@ -7,6 +7,7 @@ struct SettingsPage: View {
     @EnvironmentObject var service: BmsService
     @EnvironmentObject var location: LocationService
     @EnvironmentObject var updater: UpdateChecker
+    @EnvironmentObject var cloud: CloudSync
     @Environment(\.dismiss) private var dismiss
 
     @State private var bgPickerItem: PhotosPickerItem?
@@ -25,6 +26,7 @@ struct SettingsPage: View {
                 locationSection
                 navSection
                 logSection
+                cloudSection
                 updateSection
                 aboutSection
             }
@@ -364,6 +366,101 @@ struct SettingsPage: View {
         }
     }
 
+    // MARK: - 云同步
+
+    private var cloudSection: some View {
+        Section {
+            Toggle(isOn: $cloud.enabled) {
+                Label("上报到服务器", systemImage: "antenna.radiowaves.left.and.right")
+            }
+
+            if cloud.enabled {
+                TextField("服务器地址，如 http://192.168.7.252:8081", text: $cloud.baseURL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+
+                TextField("授权码", text: $cloud.code)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+
+                HStack {
+                    Text("状态")
+                    Spacer()
+                    Text(cloud.phase.label)
+                        .foregroundColor(phaseColor)
+                }
+                HStack {
+                    Text("设备号")
+                    Spacer()
+                    Text(cloud.deviceNo)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                HStack {
+                    Text("待上传")
+                    Spacer()
+                    Text("遥测 \(cloud.pendingTelemetry) · 轨迹 \(cloud.pendingTrack)")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                }
+                if let t = cloud.lastUpload {
+                    HStack {
+                        Text("上次成功")
+                        Spacer()
+                        Text(t, style: .time)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                if !cloud.statusText.isEmpty {
+                    Text(cloud.statusText)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+
+                Button {
+                    cloud.activate()
+                } label: {
+                    HStack {
+                        Label(cloud.isActivated ? "重新激活" : "用授权码激活", systemImage: "key")
+                        Spacer()
+                        if cloud.phase == .enrolling { ProgressView() }
+                    }
+                }
+                .disabled(cloud.code.trimmingCharacters(in: .whitespaces).isEmpty)
+
+                Button {
+                    cloud.uploadNow()
+                } label: {
+                    Label("立即上传", systemImage: "arrow.up.circle")
+                }
+
+                if cloud.pendingTotal > 0 {
+                    Button(role: .destructive) {
+                        cloud.clearQueues()
+                    } label: {
+                        Label("清空待传数据（\(cloud.pendingTotal) 条）", systemImage: "trash")
+                    }
+                }
+            }
+        } header: {
+            Text("云同步")
+        } footer: {
+            Text("开着蓝牙在路上跑时，每 \(cloud.telemetryIntervalS) 秒从保护板取一个电池点、每 \(cloud.trackIntervalS) 秒取一个轨迹点，先存本机再批量上传。断网会一直攒着，联网后按采集时刻补传，不会丢也不会重复。服务器地址形如 http://192.168.7.252:8081，授权码由后台生成。")
+        }
+    }
+
+    private var phaseColor: Color {
+        switch cloud.phase {
+        case .ready: return .green
+        case .failed: return .orange
+        case .enrolling: return .blue
+        case .needConfig, .off: return .secondary
+        }
+    }
+
     // MARK: - 升级
 
     private var updateSection: some View {
@@ -421,7 +518,7 @@ struct SettingsPage: View {
                 Text("JK02 / ANT-BLE")
                     .foregroundColor(.secondary)
             }
-            Text("智能车机系统 · iOS 版。数据全部在本机处理，不上传云端。")
+            Text("智能车机系统 · iOS 版。电池与轨迹默认只在本机处理；只有打开「云同步」并填了授权码，才会加密上报到你自己的服务器。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }

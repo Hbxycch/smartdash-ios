@@ -9,6 +9,7 @@ struct SmartDashApp: App {
     @StateObject private var updater = UpdateChecker()
     @StateObject private var navi = NavigationController()
     @StateObject private var favorites = FavoriteStore()
+    @StateObject private var cloud = CloudSync()
 
     init() {
         // 崩溃捕获要最先装，装之前挂掉就什么都留不下
@@ -26,6 +27,7 @@ struct SmartDashApp: App {
                 .environmentObject(updater)
                 .environmentObject(navi)
                 .environmentObject(favorites)
+                .environmentObject(cloud)
                 .preferredColorScheme(settings.darkTheme ? .dark : .light)
         }
     }
