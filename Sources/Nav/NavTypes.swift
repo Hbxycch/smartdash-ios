@@ -71,12 +71,13 @@ struct Place: Identifiable, Hashable, Codable {
         guard lat != 0, lon != 0 else { return nil }
         let addr = poi.address ?? ""
         let city = poi.city ?? ""
+        let rawDistance = poi.distance          // CGFloat，可能为 -1
         return Place(id: poi.uid ?? "\(lat),\(lon)",
                      name: poi.name ?? "未知地点",
                      address: addr.isEmpty ? city : addr,
                      latitude: lat,
                      longitude: lon,
-                     distance: poi.distance > 0 ? poi.distance : nil)
+                     distance: rawDistance > 0 ? Int(rawDistance.rounded()) : nil)
     }
 }
 

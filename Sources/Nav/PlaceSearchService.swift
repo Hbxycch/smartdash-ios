@@ -53,7 +53,6 @@ final class PlaceSearchService: NSObject, ObservableObject {
             req.keywords = kw
             req.types = "all"
             req.city = "全国"
-            req.citylimit = false
             req.offset = 25
             api.aMapPOISearch(req)
         }

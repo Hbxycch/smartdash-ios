@@ -53,6 +53,16 @@ jobs:
           pod install --repo-update
           ls -d SmartDash.xcworkspace
 
+      - name: 打印高德 SDK 接口（调试用，验证完删除）
+        run: |
+          for f in AMapNaviDriveManager AMapNaviRideManager AMapNaviInfo AMapNaviRoute AMapNaviError AMapNaviType AMapSearchAPI AMapSearchError AMapPOIKeywordsSearchRequest; do
+            p=$(find Pods -name "$f.h" | head -1)
+            echo "########## $f -> $p"
+            if [ -n "$p" ]; then
+              grep -nE "^[[:space:]]*[-+] \(|@property|AMapNavi.*Strategy|AMapNaviType" "$p" | head -60
+            fi
+          done
+
       - name: 编译（不签名）
         run: |
           set -o pipefail
