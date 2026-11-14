@@ -261,34 +261,9 @@ struct SettingsPage: View {
     // MARK: - 蓝牙日志
 
     private var logSection: some View {
-        Section("蓝牙日志") {
-            Toggle("记录蓝牙日志", isOn: $settings.btLogEnabled)
-            HStack {
-                Text("日志文件")
-                Spacer()
-                Text(BtLog.fileSize > 0 ? "\(ByteCountFormatter.string(fromByteCount: Int64(BtLog.fileSize), countStyle: .file))" : "暂无")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-            }
-            if BtLog.fileSize > 0 {
-                ShareLink(item: BtLog.fileURL,
-                          subject: Text("蓝牙日志")) {
-                    Label("分享日志文件", systemImage: "square.and.arrow.up")
-                }
-                Button {
-                    showLogPreview = true
-                } label: {
-                    Label("查看最近日志", systemImage: "doc.text.magnifyingglass")
-                }
-                Button(role: .destructive) {
-                    BtLog.clear()
-                } label: {
-                    Label("清空日志", systemImage: "trash")
-                }
-            }
-            Text("连接保护板时的每一步（扫描、连接、特征、收发的原始数据、解析结果）都会记录到日志。连不上时把日志文件发出来即可定位问题。")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+        Group {
+            bleLogSection
+            crashLogSection
         }
         .sheet(isPresented: $showLogPreview) {
             NavigationStack {
@@ -307,8 +282,61 @@ struct SettingsPage: View {
                 }
             }
         }
+        .sheet(isPresented: $showCrashPreview) {
+            NavigationStack {
+                ScrollView {
+                    Text(CrashLogger.tailLines(300))
+                        .font(.system(size: 10, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                .navigationTitle("崩溃记录")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭") { showCrashPreview = false }
+                    }
+                }
+            }
+        }
+    }
 
-        // 崩溃日志：闪退类问题只能靠它定位
+    private var bleLogSection: some View {
+        Section {
+            Toggle("记录蓝牙日志", isOn: $settings.btLogEnabled)
+            HStack {
+                Text("日志文件")
+                Spacer()
+                Text(BtLog.fileSize > 0
+                     ? ByteCountFormatter.string(fromByteCount: Int64(BtLog.fileSize), countStyle: .file)
+                     : "暂无")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+            if BtLog.fileSize > 0 {
+                ShareLink(item: BtLog.fileURL, subject: Text("蓝牙日志")) {
+                    Label("分享日志文件", systemImage: "square.and.arrow.up")
+                }
+                Button {
+                    showLogPreview = true
+                } label: {
+                    Label("查看最近日志", systemImage: "doc.text.magnifyingglass")
+                }
+                Button(role: .destructive) {
+                    BtLog.clear()
+                } label: {
+                    Label("清空日志", systemImage: "trash")
+                }
+            }
+            Text("连接保护板时的每一步（扫描、连接、特征、收发的原始数据、解析结果）都会记录到日志。连不上时把日志文件发出来即可定位问题。")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        } header: {
+            Text("蓝牙日志")
+        }
+    }
+
+    private var crashLogSection: some View {
         Section {
             if CrashLogger.fileSize > 0 {
                 ShareLink(item: CrashLogger.fileURL, subject: Text("崩溃日志")) {
@@ -333,23 +361,6 @@ struct SettingsPage: View {
             Text("崩溃日志")
         } footer: {
             Text("闪退时会把调用栈写在这里。下次闪退后进来分享这个文件，就能直接定位到出错代码。")
-        }
-        .sheet(isPresented: $showCrashPreview) {
-            NavigationStack {
-                ScrollView {
-                    Text(CrashLogger.tailLines(300))
-                        .font(.system(size: 10, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .navigationTitle("崩溃记录")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("关闭") { showCrashPreview = false }
-                    }
-                }
-            }
         }
     }
 
