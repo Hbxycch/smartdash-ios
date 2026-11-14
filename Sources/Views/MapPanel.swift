@@ -180,7 +180,7 @@ struct TrackMap: UIViewRepresentable {
         m.isPitchEnabled = false
         m.showsCompass = false
         m.showsScale = false
-        m.showsUserLocation = true          // 显示我的位置蓝点箭头
+        m.showsUserLocation = false          // 系统蓝点在部分 iOS 版本上不可靠，改用自绘车辆箭头
         m.isZoomEnabled = false             // 缩放走右下角按钮，避免捏合与相机绑定打架
         m.isScrollEnabled = true            // 允许拖动浏览
         m.userTrackingMode = .none
@@ -208,6 +208,7 @@ struct TrackMap: UIViewRepresentable {
             c.destinationId = destination?.id
             map.removeOverlays(map.overlays)
             map.removeAnnotations(map.annotations)
+            if let v = c.vehicleAnnotation { map.addAnnotation(v) }
             if route.count > 1 {
                 map.addOverlay(MKPolyline(coordinates: route, count: route.count))
             }
@@ -217,6 +218,30 @@ struct TrackMap: UIViewRepresentable {
                 pin.title = d.name
                 map.addAnnotation(pin)
             }
+        }
+
+        // 车辆位置箭头：有定位就显示，方向随航向旋转
+        let cameraHeading = headingUp ? heading : 0
+        if hasFix {
+            let v: VehicleAnnotation
+            if let existing = c.vehicleAnnotation {
+                v = existing
+            } else {
+                v = VehicleAnnotation()
+                c.vehicleAnnotation = v
+                map.addAnnotation(v)
+            }
+            v.coordinate = coordinate
+
+            // 箭头贴图朝上绘制；地图不旋转时按航向转，车头朝上模式地图已旋转、箭头保持朝上
+            let deg = headingUp ? 0 : heading
+            if let view = map.view(for: v) {
+                view.transform = CGAffineTransform(rotationAngle: CGFloat(deg * .pi / 180))
+            }
+            c.lastArrowDeg = deg
+        } else if let v = c.vehicleAnnotation {
+            map.removeAnnotation(v)
+            c.vehicleAnnotation = nil
         }
 
         // 只在跟随状态下驱动相机；用户拖动浏览时不抢镜头
@@ -230,10 +255,51 @@ struct TrackMap: UIViewRepresentable {
         map.setCamera(cam, animated: false)
     }
 
+    /// 自绘车辆位置标注（带航向箭头），替代系统蓝点
+    final class VehicleAnnotation: NSObject, MKAnnotation {
+        @objc dynamic var coordinate: CLLocationCoordinate2D
+        init(coordinate: CLLocationCoordinate2D = CLLocationCoordinate2DMake(0, 0)) {
+            self.coordinate = coordinate
+        }
+    }
+
+    /// 绘制车辆位置箭头贴图：青色光晕 + 白描边圆点 + 向上的航向楔形
+    private static func vehicleArrowImage() -> UIImage {
+        let side: CGFloat = 44
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side))
+        return renderer.image { ctx in
+            let c = CGPoint(x: side / 2, y: side / 2)
+
+            // 航向楔形（朝上）
+            let wedge = UIBezierPath()
+            wedge.move(to: CGPoint(x: c.x, y: 2))
+            wedge.addLine(to: CGPoint(x: c.x + 9, y: c.y - 4))
+            wedge.addLine(to: CGPoint(x: c.x - 9, y: c.y - 4))
+            wedge.close()
+            UIColor(red: 0.21, green: 0.84, blue: 0.91, alpha: 1.0).setFill()
+            wedge.fill()
+
+            // 外圈光晕
+            let halo = UIBezierPath(arcCenter: c, radius: 13.5, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+            UIColor(red: 0.21, green: 0.84, blue: 0.91, alpha: 0.22).setFill()
+            halo.fill()
+
+            // 白描边圆点
+            let dot = UIBezierPath(arcCenter: c, radius: 8.5, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+            UIColor.white.setFill()
+            dot.fill()
+            UIColor(red: 0.13, green: 0.71, blue: 0.79, alpha: 1.0).setStroke()
+            dot.lineWidth = 2
+            dot.stroke()
+        }
+    }
+
     final class Coordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
         var routePointCount = -1
         var destinationId: String?
         var parent: TrackMap?
+        var vehicleAnnotation: VehicleAnnotation?
+        var lastArrowDeg: Double = 0
 
         @objc func onPan(_ g: UIPanGestureRecognizer) {
             guard g.state == .began || g.state == .changed else { return }
@@ -258,6 +324,19 @@ struct TrackMap: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if let vehicle = annotation as? VehicleAnnotation {
+                let id = "vehicle"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: id)
+                    ?? MKAnnotationView(annotation: vehicle, reuseIdentifier: id)
+                view.annotation = vehicle
+                view.image = TrackMap.vehicleArrowImage()
+                // 贴图中心对准坐标（楔形尖端除外），并应用当前航向
+                view.centerOffset = CGPoint(x: 0, y: 0)
+                let deg = parent?.headingUp == true ? 0 : (parent?.heading ?? 0)
+                view.transform = CGAffineTransform(rotationAngle: CGFloat(deg * .pi / 180))
+                view.canShowCallout = false
+                return view
+            }
             guard !(annotation is MKUserLocation) else { return nil }
             let id = "dest"
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? MKMarkerAnnotationView

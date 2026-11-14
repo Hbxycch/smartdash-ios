@@ -135,7 +135,7 @@ struct NavSearchSheet: View {
             banner(msg, color: p.textSecondary)
         }
         if !AMapBootstrap.configured {
-            banner("未配置高德 Key：搜索与算路不可用", color: p.danger)
+            banner("未配置高德 Key（读到长度 \(AMapBootstrap.key.count)）：搜索与算路不可用", color: p.danger)
         }
 
         if search.loading {
