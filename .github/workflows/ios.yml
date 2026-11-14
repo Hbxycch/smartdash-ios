@@ -6,7 +6,7 @@ name: iOS Build
 #   3) 手动 Run workflow       → 想验证改动时随手编一次
 on:
   push:
-    branches: [main]
+    branches: [main, master]
     tags: ["v*"]
     paths-ignore:
       - "**/*.md"

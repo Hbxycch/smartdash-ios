@@ -19,6 +19,9 @@ Windows 不能编 iOS，所以工程里不放 `.xcodeproj`，改用 `project.yml
 | **Sideloadly** | 用 Apple ID 给 IPA 签名并装进 iPhone（首选，最省事） | https://sideloadly.io/ |
 | **Apple 设备驱动** | Sideloadly 要能识别 iPhone；Win10 装 iTunes，Win11 装「Apple 设备」 | Win11：https://apps.microsoft.com/detail/9np83lwlpz9k <br> Win10：https://www.apple.com/itunes/download/win64 |
 
+> **本机现状**：iTunes 已装在 `D:\Program Files\iTunes\iTunes.exe`，`Apple Mobile Device Service` 正在运行，驱动这关已经过了——插上 iPhone 后在「此电脑」里能看到 Apple iPhone 就说明 Sideloadly 能识别。
+> Sideloadly 安装包已下载（`下载\SideloadlySetup64.exe`），双击装完即可；它只是签名工具，本身编不了 iOS。
+
 可选（替代方案 / 长期使用）：
 
 | 工具 | 用途 | 下载地址 |
@@ -34,16 +37,16 @@ Windows 不能编 iOS，所以工程里不放 `.xcodeproj`，改用 `project.yml
 
 ## 二、一次性准备
 
+1. 打开 https://github.com/new 新建空仓库，名字填 `smartdash-ios`，**不要**勾 README / .gitignore / License（勾了会跟本地历史冲突），Private 或 Public 都行。
+2. 回到本目录，一条命令推上去：
+
 ```bash
-# 1. 在 GitHub 网页上新建一个空仓库，例如 jkbms-ios（Private 也可以）
-# 2. 本地初始化并推送（在本目录执行）
-git init
-git add -A
-git commit -m "iOS v4.2 初始版本"
-git branch -M main
-git remote add origin https://github.com/<你的账号>/jkbms-ios.git
-git push -u origin main
+./scripts/push.sh https://github.com/<你的账号>/smartdash-ios.git
 ```
+
+脚本会做：设置提交身份（没配过也不会失败）→ 分支统一成 `main` → 绑定/更新 `origin` → 提交残留改动 → `git push` → 打印 Actions 地址。
+
+> 首次 push 会弹 GitHub 登录窗口：浏览器授权即可（Git Credential Manager 会记住）。如果你开了两步验证又用密码推送失败，把仓库地址换成 SSH（`git@github.com:...`）或去 GitHub 生成 Personal Access Token 当密码用。
 
 > Private 仓库的 Actions 额度：免费账号 2000 分钟/月，但 **macOS 机器按 10 倍计费**，即实际约 200 分钟。这个工程一次编译约 2–3 分钟（算 20–30 分钟额度），够用。想无限次编就把仓库设为 Public。
 
@@ -53,12 +56,14 @@ git push -u origin main
 
 1. **push 代码** → 打开仓库的 **Actions** 页 → `iOS Build` 自动开始。
 2. 等 2–3 分钟变绿，进这次运行页面，底部 **Artifacts** 下载 `SmartDash-unsigned-ipa.zip`，解压得到 `SmartDash-unsigned.ipa`。
-3. 数据线连 iPhone，打开 **Sideloadly**：
+3. 数据线连 iPhone（**要解锁屏幕并点「信任此电脑」**），打开 **Sideloadly**：
    - `IPA` 选刚下载的 ipa；
+   - 顶部设备下拉里选中你的 iPhone（列表是空的就先解决驱动/信任）；
    - `Apple ID` 填你的 Apple ID（免费账号即可）；
-   - 点 **Start**，按提示输入密码（双重认证要填专用密码或在手机上点允许）；
+   - 点 **Start**，按提示输入密码（开了双重认证要填**专用密码**，或直接在手机上点允许）；
    - 手机上 **设置 → 通用 → VPN与设备管理 → 描述文件** 里点「信任」。
-4. 打开 App，首次会请求蓝牙和定位权限，都允许。
+4. **打开开发者模式**（iOS 16 起必做，否则装上了也弹「需要开发者模式」打不开）：设置 → 隐私与安全性 → 拉到最底 → 开发者模式 → 打开 → 重启手机 → 重启后确认。
+5. 打开 App，首次会请求蓝牙和定位权限，都允许。
 
 **免费 Apple ID 的限制**（这是苹果的规则，不是 App 的问题）：
 
@@ -70,10 +75,10 @@ git push -u origin main
 **打 tag 发版**（想要固定下载链接时）：
 
 ```bash
-git tag v4.2 && git push origin v4.2
+git tag v4.3 && git push origin v4.3
 ```
 
-CI 会把 ipa 传到 GitHub Release，链接形如 `https://github.com/<账号>/jkbms-ios/releases/download/v4.2/SmartDash-unsigned.ipa`，这个地址可以直接填进设置页的「更新清单」。
+CI 会把 ipa 传到 GitHub Release，链接形如 `https://github.com/<账号>/smartdash-ios/releases/download/v4.3/SmartDash-unsigned.ipa`，这个地址可以直接填进设置页的「更新清单」。
 
 ---
 
