@@ -1,0 +1,88 @@
+# XcodeGen 工程描述文件。
+# 本机不需要装 Xcode：GitHub Actions 的 macOS 机器会执行 `xcodegen generate` 生成 .xcodeproj 再编译。
+# 改了源文件目录结构、Info.plist 权限、bundle id、版本号，都改这里，不要手改 .xcodeproj。
+name: JKBmsMonitor
+
+options:
+  bundleIdPrefix: com.jkbms
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    CLANG_ENABLE_MODULES: YES
+    SWIFT_OPTIMIZATION_LEVEL: "-Onone"      # Release 下由 configs 覆盖
+  configs:
+    Debug:
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+      SWIFT_COMPILATION_MODE: wholemodule
+
+targets:
+  JKBmsMonitor:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jkbms.monitor.ios
+        PRODUCT_NAME: JKBmsMonitor
+        MARKETING_VERSION: "4.2"
+        CURRENT_PROJECT_VERSION: "42"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SWIFT_EMIT_LOC_STRINGS: NO
+        # 免费个人证书签名时不允许的 capability 不要声明；后台蓝牙/定位已在 Info.plist 里
+    info:
+      path: Support/Info.plist
+      properties:
+        CFBundleDisplayName: 智能车机
+        CFBundleName: JKBmsMonitor
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        # ── 权限说明（缺了会在首次使用时闪退）──
+        NSBluetoothAlwaysUsageDescription: 需要蓝牙与电池保护板（JK-BMS / ANT-BMS）通信，读取总压、电流、单体电压与温度。
+        NSBluetoothPeripheralUsageDescription: 需要蓝牙与电池保护板通信。
+        NSLocationWhenInUseUsageDescription: 用于显示车速、航向与地图导航。
+        # ── 后台模式：锁屏/切后台时保持 BLE 与定位 ──
+        UIBackgroundModes:
+          - bluetooth-central
+          - location
+        ITSAppUsesNonExemptEncryption: false
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIViewControllerBasedStatusBarAppearance: false
+
+schemes:
+  JKBmsMonitor:
+    build:
+      targets:
+        JKBmsMonitor: all
+    run:
+      config: Debug
+    archive:
+      config: Release

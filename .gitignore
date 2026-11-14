@@ -1,0 +1,24 @@
+# macOS / Xcode
+.DS_Store
+build/
+DerivedData/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcodeproj/
+*.xcworkspace/
+!*.xcodeproj/project.pbxproj
+
+# 生成物
+Payload/
+*.ipa
+Support/Info.plist
+
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
