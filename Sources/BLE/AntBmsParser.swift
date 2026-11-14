@@ -51,9 +51,10 @@ final class AntBmsParser {
         return f
     }
 
-    /// CRC-16/MODBUS
-    static func crc16(_ b: [UInt8], _ off: Int, _ len: Int) -> UInt16 {
-        var crc: UInt16 = 0xFFFF
+    /// CRC-16/MODBUS（多项式 0xA001）
+    /// 初值：旧固件 0xFFFF；2024 新固件状态帧改用 0xE189（实机抓包反推，已三方帧验证）
+    static func crc16(_ b: [UInt8], _ off: Int, _ len: Int, _ seed: UInt16 = 0xFFFF) -> UInt16 {
+        var crc: UInt16 = seed
         for i in off..<(off + len) {
             crc ^= UInt16(b[i])
             for _ in 0..<8 {
@@ -108,9 +109,11 @@ final class AntBmsParser {
                     buf.removeFirst(1)
                     continue
                 }
-                let calc = Self.crc16(buf, 1, total - 5)
-                let remote = UInt16(buf[total - 3]) | (UInt16(buf[total - 4]) << 8)
-                if calc != remote {
+                // CRC 字节低字节在 total-4（与 ESPHome 一致）；新旧固件初值都接受
+                let calcOld = Self.crc16(buf, 1, total - 5, 0xFFFF)
+                let calcNew = Self.crc16(buf, 1, total - 5, 0xE189)
+                let remote = UInt16(buf[total - 4]) | (UInt16(buf[total - 3]) << 8)
+                if calcOld != remote && calcNew != remote {
                     buf.removeFirst(1)
                     continue
                 }
