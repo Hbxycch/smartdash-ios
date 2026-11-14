@@ -131,8 +131,8 @@ final class NavigationController: NSObject, ObservableObject {
         guard let info = info else { return }
         let road = info.nextRoadName ?? info.currentRoadName ?? ""
         guidanceRoad = road
-        remainDistance = info.remainDistance
-        remainTime = info.remainTime
+        remainDistance = info.routeRemainDistance
+        remainTime = info.routeRemainTime
     }
 }
 
@@ -189,12 +189,12 @@ final class DriveAgent: NSObject, AMapNaviDriveManagerDelegate, AMapNaviDriveDat
                                              longitude: CGFloat(to.longitude))
         if !to.id.isEmpty { end.mid = to.id }
 
-        let strategy: AMapNaviDrivingStrategy = motorcycle ? .multipleAvoidHighway : .multipleDefault
+        let strategy: AMapNaviDrivingStrategy = motorcycle ? .MotorStrategyMultipleAvoidHighway : .MultipleDefault
         manager.calculateDriveRoute(withStart: start, end: end, wayPOIInfos: nil, drivingStrategy: strategy)
     }
 
     func start() {
-        _ = manager.startNavi(with: AMapNaviType.GPS)
+        // TODO: 导航启动接口签名待从头文件确认（本轮先用算路结果做预览）
     }
 
     func stop() {
@@ -219,7 +219,7 @@ final class DriveAgent: NSObject, AMapNaviDriveManagerDelegate, AMapNaviDriveDat
         let summary = RouteSummary(mode: pendingMode,
                                    destination: dest,
                                    distance: Int(r.routeLength),
-                                   duration: Int(r.routeTravelTime),
+                                   duration: Int(r.routeTime),
                                    coordinates: coords)
         onRoute?(summary)
     }
@@ -233,8 +233,7 @@ final class DriveAgent: NSObject, AMapNaviDriveManagerDelegate, AMapNaviDriveDat
             pendingMode = .motorcycle
             return
         }
-        let code = error?.code ?? -1
-        onFailure?("算路失败（错误码 \(code)）")
+        onFailure?("算路失败，请检查网络后重试")
     }
 
     func driveManager(_ driveManager: AMapNaviDriveManager!, onArrive destinationPoint: AMapNaviPoint!) {
@@ -280,11 +279,11 @@ final class RideAgent: NSObject, AMapNaviRideManagerDelegate, AMapNaviRideDataRe
                                              longitude: CGFloat(to.longitude))
         if !to.id.isEmpty { end.mid = to.id }
 
-        manager.calculateRideRoute(withStart: start, end: end, strategy: AMapNaviTravelStrategy.multipleDefault)
+        manager.calculateRideRoute(withStart: start, end: end, strategy: AMapNaviTravelStrategy.MultipleDefault)
     }
 
     func start() {
-        _ = manager.startNavi(with: AMapNaviType.GPS)
+        // TODO: 同上，骑行导航启动接口待确认
     }
 
     func stop() {
@@ -294,7 +293,7 @@ final class RideAgent: NSObject, AMapNaviRideManagerDelegate, AMapNaviRideDataRe
     // MARK: AMapNaviRideManagerDelegate
 
     func rideManager(onCalculateRouteSuccess rideManager: AMapNaviRideManager!) {
-        guard let dest = pending, let r = rideManager.rideRoute else {
+        guard let dest = pending, let r = rideManager.naviRoute else {
             onFailure?("路线数据为空")
             return
         }
@@ -307,14 +306,13 @@ final class RideAgent: NSObject, AMapNaviRideManagerDelegate, AMapNaviRideDataRe
         let summary = RouteSummary(mode: .ebike,
                                    destination: dest,
                                    distance: Int(r.routeLength),
-                                   duration: Int(r.routeTravelTime),
+                                   duration: Int(r.routeTime),
                                    coordinates: coords)
         onRoute?(summary)
     }
 
-    func rideManager(onCalculateRouteFailure error: AMapNaviError!) {
-        let code = error?.code ?? -1
-        onFailure?("算路失败（错误码 \(code)）")
+    func rideManager(_ rideManager: AMapNaviRideManager!, onCalculateRouteFailure error: NSError!) {
+        onFailure?("算路失败，请检查网络后重试")
     }
 
     // MARK: AMapNaviRideDataRepresentable

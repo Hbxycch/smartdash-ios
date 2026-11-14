@@ -47,14 +47,14 @@ final class PlaceSearchService: NSObject, ObservableObject {
             req.radius = 30000      // 30km，跑长途时周边搜也能覆盖
             req.sortrule = 0        // 距离优先
             req.offset = 25
-            api.aMapPOISearch(req)
+            api.aMapPOIAroundSearch(req)
         } else {
             let req = AMapPOIKeywordsSearchRequest()
             req.keywords = kw
             req.types = "all"
             req.city = "全国"
             req.offset = 25
-            api.aMapPOISearch(req)
+            api.aMapPOIKeywordsSearch(req)
         }
     }
 
@@ -81,12 +81,7 @@ extension PlaceSearchService: AMapSearchDelegate {
 
     func onPOISearchFailed(_ request: AMapPOISearchBaseRequest!, error: AMapSearchError!) {
         loading = false
-        let code = error?.code ?? -1
-        // 10001/10007/10009 都是 Key 相关（无效、过期、与平台或 Bundle ID 不匹配）
-        if code == 10001 || code == 10007 || code == 10009 {
-            message = "高德 Key 无效，或与 Bundle ID 不匹配"
-        } else {
-            message = "搜索失败（错误码 \(code)）"
-        }
+        message = error?.description ?? "搜索失败，请检查网络或高德 Key 配置"
+
     }
 }
