@@ -53,16 +53,6 @@ jobs:
           pod install
           ls -d SmartDash.xcworkspace
 
-      - name: 打印高德 SDK 接口（调试用，验证完删除）
-        run: |
-          H=Pods/AMapNavi/AMapNaviKit.framework/Headers
-          echo "########## AMapNaviBaseManager 方法"
-          grep -nE "^\s*[-+] \(" $H/AMapNaviBaseManager.h | head -40
-          echo "########## 谁在用 AMapNaviType"
-          grep -rn "AMapNaviType)" $H | head -10
-          echo "########## 头文件清单"
-          ls $H
-
       - name: 编译（不签名）
         run: |
           set -o pipefail

@@ -194,11 +194,12 @@ final class DriveAgent: NSObject, AMapNaviDriveManagerDelegate, AMapNaviDriveDat
     }
 
     func start() {
-        // TODO: 导航启动接口签名待从头文件确认（本轮先用算路结果做预览）
+        // 高德 v10 的启动接口在基类上叫 startGPSNavi（不是 startNavi）
+        _ = manager.startGPSNavi()
     }
 
     func stop() {
-        manager.stopNavi()
+        _ = manager.stopNavi()
     }
 
     // MARK: AMapNaviDriveManagerDelegate
@@ -283,11 +284,11 @@ final class RideAgent: NSObject, AMapNaviRideManagerDelegate, AMapNaviRideDataRe
     }
 
     func start() {
-        // TODO: 同上，骑行导航启动接口待确认
+        _ = manager.startGPSNavi()
     }
 
     func stop() {
-        manager.stopNavi()
+        _ = manager.stopNavi()
     }
 
     // MARK: AMapNaviRideManagerDelegate
