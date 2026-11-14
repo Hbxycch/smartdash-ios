@@ -1,7 +1,8 @@
 # XcodeGen 工程描述文件。
 # 本机不需要装 Xcode：GitHub Actions 的 macOS 机器会执行 `xcodegen generate` 生成 .xcodeproj 再编译。
 # 改了源文件目录结构、Info.plist 权限、bundle id、版本号，都改这里，不要手改 .xcodeproj。
-name: JKBmsMonitor
+# 工程名 SmartDash（仪表台）；应用对外显示名仍是「智能车机」，见 CFBundleDisplayName。
+name: SmartDash
 
 options:
   bundleIdPrefix: com.jkbms
@@ -27,7 +28,7 @@ settings:
       SWIFT_COMPILATION_MODE: wholemodule
 
 targets:
-  JKBmsMonitor:
+  SmartDash:
     type: application
     platform: iOS
     deploymentTarget: "16.0"
@@ -36,7 +37,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jkbms.monitor.ios
-        PRODUCT_NAME: JKBmsMonitor
+        PRODUCT_NAME: SmartDash
         MARKETING_VERSION: "4.2"
         CURRENT_PROJECT_VERSION: "42"
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -49,7 +50,7 @@ targets:
       path: Support/Info.plist
       properties:
         CFBundleDisplayName: 智能车机
-        CFBundleName: JKBmsMonitor
+        CFBundleName: SmartDash
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true
@@ -78,10 +79,10 @@ targets:
         UIViewControllerBasedStatusBarAppearance: false
 
 schemes:
-  JKBmsMonitor:
+  SmartDash:
     build:
       targets:
-        JKBmsMonitor: all
+        SmartDash: all
     run:
       config: Debug
     archive:

@@ -1,8 +1,10 @@
 # 智能车机系统 · iOS 版
 
-Android 版（`../JKBmsMonitor`）的功能对等移植：BLE 直连 JK-BMS / ANT-BMS，仪表盘 + 电芯 + 定位三页签，深/浅双主题与自定义背景图，电池化学体系 × 串数换算。
+Android 版（`../JKBmsMonitor`，Android 工程目录）的功能对等移植：BLE 直连 JK-BMS / ANT-BMS，仪表盘 + 电芯 + 定位三页签，深/浅双主题与自定义背景图，电池化学体系 × 串数换算。
 
 **开发方式：Windows 改代码 → GitHub Actions 的 macOS 机器编译 → 下载 unsigned IPA → 电脑端签名装到 iPhone。**
+
+**命名约定**：代码工程名 / target / scheme = `SmartDash`（仪表台），桌面显示名仍是「智能车机」；Bundle ID 保持 `com.jkbms.monitor.ios` 不动——它是签名与升级的锚点，改了等于换成一个全新 App，已装的版本不会覆盖升级。
 
 Windows 不能编 iOS，所以工程里不放 `.xcodeproj`，改用 `project.yml` + [XcodeGen](https://github.com/yonaskolb/XcodeGen)，由 CI 生成工程再编译。你本地只需要一个能编辑文本的工具。
 
@@ -50,7 +52,7 @@ git push -u origin main
 ## 三、编译 → 装机（每次改完就走一遍）
 
 1. **push 代码** → 打开仓库的 **Actions** 页 → `iOS Build` 自动开始。
-2. 等 2–3 分钟变绿，进这次运行页面，底部 **Artifacts** 下载 `JKBmsMonitor-unsigned-ipa.zip`，解压得到 `JKBmsMonitor-unsigned.ipa`。
+2. 等 2–3 分钟变绿，进这次运行页面，底部 **Artifacts** 下载 `SmartDash-unsigned-ipa.zip`，解压得到 `SmartDash-unsigned.ipa`。
 3. 数据线连 iPhone，打开 **Sideloadly**：
    - `IPA` 选刚下载的 ipa；
    - `Apple ID` 填你的 Apple ID（免费账号即可）；
@@ -71,14 +73,14 @@ git push -u origin main
 git tag v4.2 && git push origin v4.2
 ```
 
-CI 会把 ipa 传到 GitHub Release，链接形如 `https://github.com/<账号>/jkbms-ios/releases/download/v4.2/JKBmsMonitor-unsigned.ipa`，这个地址可以直接填进设置页的「更新清单」。
+CI 会把 ipa 传到 GitHub Release，链接形如 `https://github.com/<账号>/jkbms-ios/releases/download/v4.2/SmartDash-unsigned.ipa`，这个地址可以直接填进设置页的「更新清单」。
 
 ---
 
 ## 四、工程结构
 
 ```
-JKBmsMonitor-iOS/
+SmartDash-iOS/
 ├── project.yml                      XcodeGen 描述（bundle id / 版本号 / Info.plist 权限都在这里）
 ├── .github/workflows/ios.yml        编译 + 打包 unsigned IPA + 打 tag 发 Release
 ├── Sources/

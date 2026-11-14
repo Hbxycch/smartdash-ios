@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 @main
-struct JKBmsMonitorApp: App {
+struct SmartDashApp: App {
     @StateObject private var settings = AppSettings()
     @StateObject private var service = BmsService()
     @StateObject private var location = LocationService()
