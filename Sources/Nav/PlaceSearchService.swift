@@ -4,22 +4,33 @@ import Combine
 
 /// 目的地搜索：关键词（带位置时走周边搜索，结果带距离）+ 分类快捷搜。
 /// 走的是高德 Search SDK，与导航 SDK 共用同一个 Key。
+///
+/// 注意：AMapSearchAPI 必须惰性创建——之前在 init（SwiftUI 视图构建期）里
+/// 直接创建并强制解包，Key 缺失或 SDK 拒绝初始化时返回 nil 导致 SIGTRAP 闪退。
 final class PlaceSearchService: NSObject, ObservableObject {
 
     @Published private(set) var results: [Place] = []
     @Published private(set) var loading = false
     @Published private(set) var message: String?
 
-    private var api: AMapSearchAPI!
+    private var api: AMapSearchAPI?
     private var lastQuery: String = ""
     private var lastCenter: CLLocationCoordinate2D?
 
     override init() {
         super.init()
-        // Key 必须在创建 AMapSearchAPI 之前注册
+        // init 里不碰任何高德对象，保证视图构建期零风险
+    }
+
+    /// 首次真正发起搜索时才创建 AMapSearchAPI
+    private func ensureAPI() -> AMapSearchAPI? {
+        if let api { return api }
+        guard AMapBootstrap.configured else { return nil }
         AMapBootstrap.start()
-        api = AMapSearchAPI()
-        api.delegate = self
+        let newAPI = AMapSearchAPI()
+        newAPI?.delegate = self
+        api = newAPI
+        return api
     }
 
     /// 有关键词就搜；center 为 nil 时走全国关键词搜索（离线规划场景）
@@ -30,7 +41,7 @@ final class PlaceSearchService: NSObject, ObservableObject {
             message = nil
             return
         }
-        guard AMapBootstrap.configured else {
+        guard let api = ensureAPI() else {
             message = "未配置高德 Key，无法搜索目的地"
             return
         }
@@ -84,6 +95,5 @@ extension PlaceSearchService: AMapSearchDelegate {
     func onPOISearchFailed(_ request: AMapPOISearchBaseRequest!, error: AMapSearchError!) {
         loading = false
         message = error?.description ?? "搜索失败，请检查网络或高德 Key 配置"
-
     }
 }

@@ -20,13 +20,13 @@ struct DashboardPage: View {
             Group {
                 if wide {
                     HStack(alignment: .top, spacing: 12) {
-                        gaugeColumn(readout)
+                        gaugeColumn(readout, gaugeHeight: min(geo.size.height * 0.42, 250))
                             .frame(width: geo.size.width * 0.42)
                         mapColumn
                     }
                 } else {
                     VStack(spacing: 12) {
-                        gaugeColumn(readout)
+                        gaugeColumn(readout, gaugeHeight: min(geo.size.height * 0.30, 210))
                         mapColumn
                             .frame(height: geo.size.height * 0.46)
                     }
@@ -47,11 +47,11 @@ struct DashboardPage: View {
 
     // MARK: - 左侧：表盘 + 电池 + 信息行
 
-    private func gaugeColumn(_ readout: BmsReadout) -> some View {
+    private func gaugeColumn(_ readout: BmsReadout, gaugeHeight: CGFloat) -> some View {
         VStack(spacing: 10) {
             GaugeView(speed: location.speedKmh)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .layoutPriority(1)
+                .frame(height: gaugeHeight)
+                .frame(maxWidth: .infinity)
 
             batteryCard(readout)
             infoRow
@@ -63,14 +63,14 @@ struct DashboardPage: View {
         let color = p.socColor(r.socLevel)
         let snap = service.snapshot
 
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text("电量")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundColor(p.textSecondary)
                 Spacer()
                 Text(snap.hasData ? snap.flowText : "无数据")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(snap.hasData ? (snap.charging ? p.ok : p.accent) : p.textSecondary)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
@@ -79,32 +79,27 @@ struct DashboardPage: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(String(format: "%.0f", r.soc))
-                    .font(.system(size: 40, weight: .semibold, design: .rounded))
+                    .font(.system(size: 26, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(color)
                 Text("%")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(color.opacity(0.8))
                 if r.socEstimated {
                     Text("估算")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 9, weight: .medium))
                         .foregroundColor(p.warn)
                         .padding(.leading, 4)
                 }
                 Spacer()
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text("总电压")
-                        .font(.system(size: 10))
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text(r.totalVoltage > 0 ? String(format: "%.2f", r.totalVoltage) : "--")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(p.textPrimary)
+                    Text("V")
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundColor(p.textSecondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text(r.totalVoltage > 0 ? String(format: "%.2f", r.totalVoltage) : "--")
-                            .font(.system(size: 26, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundColor(p.textPrimary)
-                        Text("V")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(p.textSecondary)
-                    }
                 }
             }
 
@@ -117,16 +112,16 @@ struct DashboardPage: View {
                         .frame(width: max(4, g.size.width * CGFloat(min(100, max(0, r.soc)) / 100)))
                 }
             }
-            .frame(height: 7)
+            .frame(height: 5)
 
             Text(BatteryProfile.cellHint(settings.chemistry, settings.series)
                  + String(format: " · 单体 %.3f V", r.cellAvg))
-                .font(.system(size: 10))
+                .font(.system(size: 9))
                 .foregroundColor(p.textSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
-        .card(padding: 12)
+        .card(padding: 10)
     }
 
     private var infoRow: some View {

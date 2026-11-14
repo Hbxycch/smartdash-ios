@@ -144,7 +144,7 @@ struct RootView: View {
         switch service.state {
         case .streaming: return p.ok
         case .connected: return p.accent
-        case .connecting, .scanning: return p.warn
+        case .connecting, .scanning, .reconnecting: return p.warn
         case .failed: return p.danger
         case .idle: return p.textSecondary
         }

@@ -93,6 +93,14 @@ struct ConnectSheet: View {
                 settings.vendor = v
                 service.startScan(vendor: v)
             }
+            // 连接成功（拿到数据流）后自动退出连接页；停 0.6s 让用户看到状态变化
+            .onChange(of: service.state) { newState in
+                if newState.isLive {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        dismiss()
+                    }
+                }
+            }
             .onDisappear {
                 if !service.state.isLive { service.stopScan() }
             }

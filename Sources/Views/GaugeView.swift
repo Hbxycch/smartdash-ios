@@ -120,10 +120,11 @@ struct GaugeView: View {
             path.move(to: p1)
             path.addLine(to: p2)
             ctx.stroke(path,
-                       with: .color(major ? p.textSecondary : p.textSecondary.opacity(0.45)),
+                       with: .color(major ? p.textSecondary : p.textSecondary.opacity(0.35)),
                        style: StrokeStyle(lineWidth: major ? 1.8 : 1, lineCap: .round))
 
-            if major {
+            // 数字标签每 40 km/h 一个，避免表盘太密显得乱
+            if v % 40 == 0 {
                 let labelR = tickOuter - len - fontSize * 0.95
                 let lp = CGPoint(x: center.x + labelR * CGFloat(cos(rad)),
                                  y: center.y + labelR * CGFloat(sin(rad)))

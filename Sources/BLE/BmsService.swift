@@ -8,6 +8,7 @@ enum LinkState: Equatable {
     case connecting(String)
     case connected(String)          // 已建链、已订阅，尚无数据
     case streaming(String)
+    case reconnecting(String, Int)  // 意外断开后自动重连（设备名, 第几次）
     case failed(String)
 
     var text: String {
@@ -17,6 +18,7 @@ enum LinkState: Equatable {
         case .connecting(let n): return "连接中 \(n)"
         case .connected(let n): return "已连接 \(n)"
         case .streaming(let n): return "数据流 \(n)"
+        case .reconnecting(let n, let i): return "信号中断，重连 \(n)（第 \(i) 次）"
         case .failed(let m): return m
         }
     }
@@ -72,6 +74,12 @@ final class BmsService: NSObject, ObservableObject {
     private var demoState = DemoState(vendor: .jikong)
     private var found: [UUID: CBPeripheral] = [:]
 
+    // ── 自动重连 ──
+    private var reconnectTarget: CBPeripheral?
+    private var reconnectAttempts = 0
+    private let maxReconnectAttempts = 5
+    private var reconnectTimer: Timer?
+
     override init() {
         super.init()
         central = CBCentralManager(delegate: self, queue: .main)
@@ -83,6 +91,7 @@ final class BmsService: NSObject, ObservableObject {
     func startScan(vendor: BatteryVendor) {
         self.vendor = vendor
         stopDemo()
+        cancelReconnect()
         devices = []
         wantScan = true
         BtLog.log("开始扫描 厂家=\(vendor == .ant ? "蚂蚁" : "极空") 全部设备=\(showAllDevices)")
@@ -108,6 +117,16 @@ final class BmsService: NSObject, ObservableObject {
     }
 
     func connect(_ device: DiscoveredDevice) {
+        // 防重复：正在连/已连同一台设备时直接忽略，避免产生第二条并行链路
+        // （此前重复连接会导致两路解析互相干扰、连接页一直不退出）
+        switch state {
+        case .connecting, .connected, .streaming, .reconnecting:
+            if peripheral?.identifier == device.id { return }
+            cancelReconnect()
+            disconnect()          // 换设备：先干净断开旧链路
+        default:
+            cancelReconnect()
+        }
         central.stopScan()
         let p = found[device.id] ?? central.retrievePeripherals(withIdentifiers: [device.id]).first
         guard let p else {
@@ -126,6 +145,7 @@ final class BmsService: NSObject, ObservableObject {
         manualDisconnect = true
         stopDemo()
         stopTimers()
+        cancelReconnect()
         BtLog.log("主动断开 \(peripheral?.name ?? "")")
         if let p = peripheral { central.cancelPeripheralConnection(p) }
         peripheral = nil
@@ -221,6 +241,11 @@ final class BmsService: NSObject, ObservableObject {
         let name = peripheral?.name ?? sourceLabel
         if !name.isEmpty, state != .streaming(name) {
             BtLog.log("首次解析成功 → 进入数据流 \(name)")
+            // 数据恢复即视为重连成功
+            reconnectTimer?.invalidate()
+            reconnectTimer = nil
+            reconnectTarget = nil
+            reconnectAttempts = 0
             state = .streaming(name)
         }
     }
@@ -229,6 +254,34 @@ final class BmsService: NSObject, ObservableObject {
         pollTimer?.invalidate(); pollTimer = nil
         watchdog?.invalidate(); watchdog = nil
         rssiTimer?.invalidate(); rssiTimer = nil
+    }
+
+    // ── 自动重连（信号差掉线时） ──
+
+    private func cancelReconnect() {
+        reconnectTimer?.invalidate()
+        reconnectTimer = nil
+        reconnectTarget = nil
+        reconnectAttempts = 0
+    }
+
+    private func scheduleReconnect() {
+        reconnectTimer?.invalidate()
+        reconnectTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+            self?.attemptReconnect()
+        }
+    }
+
+    private func attemptReconnect() {
+        reconnectTimer = nil
+        guard let p = reconnectTarget else { return }
+        reconnectAttempts += 1
+        let name = p.name ?? sourceLabel
+        BtLog.log("自动重连 第\(reconnectAttempts)次 \(name)")
+        state = .reconnecting(name, reconnectAttempts)
+        peripheral = p
+        p.delegate = self
+        central.connect(p, options: nil)
     }
 
     private func startRSSI() {
@@ -286,9 +339,16 @@ extension BmsService: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager,
                         didFailToConnect peripheral: CBPeripheral,
                         error: Error?) {
+        stopTimers()
+        // 自动重连过程中的失败：还有次数就继续排下一次
+        if reconnectTarget != nil, reconnectAttempts < maxReconnectAttempts {
+            BtLog.log("重连失败 \(error?.localizedDescription ?? "未知原因")，3s 后再试")
+            scheduleReconnect()
+            return
+        }
+        cancelReconnect()
         BtLog.log("连接失败 \(error?.localizedDescription ?? "未知原因")")
         state = .failed("连接失败：\(error?.localizedDescription ?? "未知原因")")
-        stopTimers()
     }
 
     func centralManager(_ central: CBCentralManager,
@@ -299,8 +359,18 @@ extension BmsService: CBCentralManagerDelegate {
         notifyChar = nil
         if manualDisconnect { manualDisconnect = false; return }   // 主动断开不报错
         if isDemo { return }
-        BtLog.log("意外断开 \(error?.localizedDescription ?? "无错误")")
-        state = .failed(error == nil ? "连接已断开" : "连接断开：\(error!.localizedDescription)")
+        let reason = error?.localizedDescription ?? "无错误"
+        // 意外断开（信号差等）：自动重连，最多 5 次，每次间隔 3s
+        if reconnectTarget == nil { reconnectTarget = peripheral }  // 首次掉线，锁定重连目标
+        if reconnectAttempts < maxReconnectAttempts {
+            BtLog.log("意外断开 \(reason)，3s 后自动重连")
+            state = .reconnecting(peripheral.name ?? sourceLabel, reconnectAttempts + 1)
+            scheduleReconnect()
+        } else {
+            BtLog.log("意外断开 \(reason)，重试 \(reconnectAttempts) 次仍失败")
+            cancelReconnect()
+            state = .failed("蓝牙信号过弱，重连 \(maxReconnectAttempts) 次失败：请靠近保护板后重新连接")
+        }
     }
 }
 
