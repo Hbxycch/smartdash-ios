@@ -53,7 +53,18 @@ jobs:
             sudo gem install cocoapods --no-document
           fi
           pod --version
-          pod install
+          # 高德 SDK 走 a.amap.com 直链下载，偶发抽风：失败自动重试 3 次
+          ok=0
+          for i in 1 2 3; do
+            if pod install; then ok=1; break; fi
+            echo "::warning::pod install 第 $i 次失败，30s 后清缓存重试"
+            rm -rf Pods Podfile.lock
+            sleep 30
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::pod install 连续 3 次失败（多半是 a.amap.com 下载超时）"
+            exit 1
+          fi
           ls -d SmartDash.xcworkspace
 
       - name: 编译（不签名）
