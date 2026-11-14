@@ -58,7 +58,7 @@ struct BatteryPage: View {
                 metric("功率", String(format: "%.0f W", s.powerW), p.textPrimary)
                 metric("压差", String(format: "%.0f mV", s.cellDelta * 1000),
                        s.cellDelta > 0.05 ? p.warn : p.textPrimary)
-                metric("剩余", String(format: "%.1f / %.0f Ah", s.remainingAh, s.ratedAh), p.textPrimary)
+                metric("剩余", s.ratedAh > 0 ? String(format: "%.1f / %.0f Ah", s.remainingAh, s.ratedAh) : "--", p.textPrimary)
                 metric("MOS 温度", tempText(s.mosTemp), p.textPrimary)
                 metric("SOH", s.soh > 0 ? "\(s.soh)%" : "--", p.textPrimary)
             }
@@ -202,7 +202,7 @@ struct BatteryPage: View {
             if !s.deviceModel.isEmpty { row("型号", s.deviceModel, p.textPrimary) }
             row("固件", s.firmware.isEmpty ? "--" : s.firmware, p.textPrimary)
             row("循环次数", s.cycles >= 0 ? "\(s.cycles)" : "--", p.textPrimary)
-            row("额定容量", String(format: "%.0f Ah", s.ratedAh), p.textPrimary)
+            row("额定容量", s.ratedAh > 0 ? String(format: "%.0f Ah", s.ratedAh) : "--", p.textPrimary)
             row("链路状态", service.state.text, p.textSecondary)
             row("信号强度", service.lastRSSI == 0 ? "--" : "\(service.lastRSSI) dBm", p.textSecondary)
             row("最后更新", updateText(s.lastUpdate), p.textSecondary)

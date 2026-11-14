@@ -40,13 +40,14 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.smartdash.monitor.ios
         PRODUCT_NAME: SmartDash
-        MARKETING_VERSION: "4.7"
-        CURRENT_PROJECT_VERSION: "47"
+        MARKETING_VERSION: "4.8"
+        CURRENT_PROJECT_VERSION: "48"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
         SWIFT_EMIT_LOC_STRINGS: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # ── 高德 SDK 桥接 ──
         SWIFT_OBJC_BRIDGING_HEADER: Support/SmartDash-Bridging-Header.h
         # 免费个人证书签名时不允许的 capability 不要声明；后台蓝牙/定位已在 Info.plist 里

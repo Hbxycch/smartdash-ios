@@ -7,7 +7,7 @@ struct BmsSnapshot {
     var totalVoltage: Double = 0        // V
     var current: Double = 0             // A，正=充电 负=放电
     var remainingAh: Double = 0
-    var ratedAh: Double = 52
+    var ratedAh: Double = 0               // 0 = 未知（未连接时不显示假数据）
     var soh: Int = 0
     var cycles: Int = -1                // -1 = 协议未提供
     var cells: [Double] = Array(repeating: 0, count: 32)
