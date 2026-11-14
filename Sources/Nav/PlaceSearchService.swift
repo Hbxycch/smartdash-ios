@@ -16,6 +16,8 @@ final class PlaceSearchService: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        // Key 必须在创建 AMapSearchAPI 之前注册
+        AMapBootstrap.start()
         api = AMapSearchAPI()
         api.delegate = self
     }

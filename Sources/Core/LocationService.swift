@@ -8,6 +8,7 @@ final class LocationService: NSObject, ObservableObject {
     @Published private(set) var speedKmh: Double = 0
     @Published private(set) var heading: Double = 0          // 0=北，顺时针
     @Published private(set) var altitude: Double = 0
+    @Published private(set) var accuracy: Double = -1        // 水平精度（米），负数为无效
     @Published private(set) var coordinate = CLLocationCoordinate2D(latitude: 39.9087, longitude: 116.3975)
     @Published private(set) var hasFix = false
     @Published private(set) var authorized = false
@@ -71,6 +72,7 @@ extension LocationService: CLLocationManagerDelegate {
         hasFix = true
         lastUpdate = Date()
         altitude = loc.altitude
+        accuracy = loc.horizontalAccuracy
         let kmh = max(0, loc.speed) * 3.6
         speedKmh = kmh.isFinite ? kmh : 0
         if loc.course >= 0 { heading = loc.course }

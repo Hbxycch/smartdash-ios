@@ -7,6 +7,8 @@ struct RootView: View {
     @EnvironmentObject var service: BmsService
     @EnvironmentObject var location: LocationService
     @EnvironmentObject var updater: UpdateChecker
+    @EnvironmentObject var navi: NavigationController
+    @EnvironmentObject var favorites: FavoriteStore
 
     @State private var tab: TabKind = .dashboard
     @State private var showConnect = false
@@ -24,6 +26,7 @@ struct RootView: View {
             }
         }
         .onAppear {
+            CrashLogger.mark("首屏出现 页签=\(tab.title)")
             tab = settings.startTab
             UIApplication.shared.isIdleTimerDisabled = true
             location.start(enabled: settings.locationEnabled)
@@ -36,6 +39,9 @@ struct RootView: View {
         .onChange(of: settings.visibleTabs) { tabs in
             if !tabs.contains(tab) { tab = tabs.first ?? .battery }
         }
+        .onChange(of: tab) { newTab in
+            CrashLogger.mark("切换到页签 \(newTab.title)")
+        }
         .sheet(isPresented: $showConnect) {
             ConnectSheet()
                 .environmentObject(settings)
@@ -47,8 +53,7 @@ struct RootView: View {
                 .environmentObject(service)
                 .environmentObject(location)
                 .environmentObject(updater)
-        }
-        .alert("发现新版本", isPresented: Binding(
+        }        .alert("发现新版本", isPresented: Binding(
             get: { updater.latest != nil },
             set: { if !$0 { updater.dismiss() } }
         )) {

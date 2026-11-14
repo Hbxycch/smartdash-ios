@@ -59,6 +59,7 @@ final class NavigationController: NSObject, ObservableObject {
     // MARK: - 对外
 
     func plan(to place: Place, from coordinate: CLLocationCoordinate2D, heading: Double = 0) {
+        AMapBootstrap.start()          // 首次算路时才注册 Key（不在启动时碰 AMap）
         guard AMapBootstrap.configured else {
             planError = "未配置高德 Key，无法算路"
             return

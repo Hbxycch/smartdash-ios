@@ -7,10 +7,12 @@ struct SettingsPage: View {
     @EnvironmentObject var service: BmsService
     @EnvironmentObject var location: LocationService
     @EnvironmentObject var updater: UpdateChecker
+    @Environment(\.dismiss) private var dismiss
 
     @State private var bgPickerItem: PhotosPickerItem?
     @State private var showConnect = false
     @State private var showLogPreview = false
+    @State private var showCrashPreview = false
 
     var body: some View {
         NavigationStack {
@@ -21,6 +23,7 @@ struct SettingsPage: View {
                 tabsSection
                 mapSection
                 locationSection
+                navSection
                 logSection
                 updateSection
                 aboutSection
@@ -29,6 +32,25 @@ struct SettingsPage: View {
             .background(settings.palette.bg)
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("返回")
+                                .font(.system(size: 15))
+                        }
+                    }
+                    .foregroundColor(settings.palette.accent)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") { dismiss() }
+                        .foregroundColor(settings.palette.accent)
+                }
+            }
             .sheet(isPresented: $showConnect) {
                 ConnectSheet()
                     .environmentObject(settings)
@@ -206,6 +228,36 @@ struct SettingsPage: View {
         }
     }
 
+    // MARK: - 导航（摩托车要车牌和排量才能算出合规路线）
+
+    private var navSection: some View {
+        Section {
+            TextField("摩托车车牌", text: Binding(
+                get: { MotorcycleProfile.plate },
+                set: { MotorcycleProfile.plate = $0 }
+            ))
+            .textInputAutocapitalization(.characters)
+            .autocorrectionDisabled()
+
+            Stepper(value: Binding(
+                get: { MotorcycleProfile.displacement },
+                set: { MotorcycleProfile.displacement = $0 }
+            ), in: 50...2000, step: 50) {
+                HStack {
+                    Text("排量")
+                    Spacer()
+                    Text("\(MotorcycleProfile.displacement) cc")
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                }
+            }
+        } header: {
+            Text("导航")
+        } footer: {
+            Text("摩托车路线要按车牌判断禁限行，排量影响匝道与高架的可通行性。导航入口在仪表页的地图上。")
+        }
+    }
+
     // MARK: - 蓝牙日志
 
     private var logSection: some View {
@@ -248,6 +300,55 @@ struct SettingsPage: View {
                 }
                 .navigationTitle("最近 200 行")
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭") { showLogPreview = false }
+                    }
+                }
+            }
+        }
+
+        // 崩溃日志：闪退类问题只能靠它定位
+        Section {
+            if CrashLogger.fileSize > 0 {
+                ShareLink(item: CrashLogger.fileURL, subject: Text("崩溃日志")) {
+                    Label("分享崩溃日志", systemImage: "exclamationmark.triangle")
+                }
+                Button {
+                    showCrashPreview = true
+                } label: {
+                    Label("查看崩溃记录", systemImage: "doc.text.magnifyingglass")
+                }
+                Button(role: .destructive) {
+                    CrashLogger.clear()
+                } label: {
+                    Label("清空崩溃记录", systemImage: "trash")
+                }
+            } else {
+                Text("暂无崩溃记录")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+        } header: {
+            Text("崩溃日志")
+        } footer: {
+            Text("闪退时会把调用栈写在这里。下次闪退后进来分享这个文件，就能直接定位到出错代码。")
+        }
+        .sheet(isPresented: $showCrashPreview) {
+            NavigationStack {
+                ScrollView {
+                    Text(CrashLogger.tailLines(300))
+                        .font(.system(size: 10, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                .navigationTitle("崩溃记录")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭") { showCrashPreview = false }
+                    }
+                }
             }
         }
     }

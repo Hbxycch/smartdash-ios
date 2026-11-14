@@ -5,8 +5,11 @@ struct DashboardPage: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var service: BmsService
     @EnvironmentObject var location: LocationService
+    @EnvironmentObject var navi: NavigationController
+    @EnvironmentObject var favorites: FavoriteStore
 
     @State private var mapDistance: Double = 260
+    @State private var showSearch = false
     @State private var now = Date()
 
     var body: some View {
@@ -19,19 +22,27 @@ struct DashboardPage: View {
                     HStack(alignment: .top, spacing: 12) {
                         gaugeColumn(readout)
                             .frame(width: geo.size.width * 0.42)
-                        mapView
+                        mapColumn
                     }
                 } else {
                     VStack(spacing: 12) {
                         gaugeColumn(readout)
-                        mapView
-                            .frame(height: geo.size.height * 0.38)
+                        mapColumn
+                            .frame(height: geo.size.height * 0.46)
                     }
                 }
             }
             .padding(12)
         }
+        .onAppear { CrashLogger.mark("仪表页加载") }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now = $0 }
+        .sheet(isPresented: $showSearch) {
+            NavSearchSheet(center: location.hasFix ? location.coordinate : nil) { place in
+                navi.plan(to: place, from: location.coordinate, heading: location.heading)
+            }
+            .environmentObject(settings)
+            .environmentObject(favorites)
+        }
     }
 
     // MARK: - 左侧：表盘 + 电池 + 信息行
@@ -154,14 +165,21 @@ struct DashboardPage: View {
         return f.string(from: now)
     }
 
-    // MARK: - 右侧：地图
+    // MARK: - 右侧：地图 + 导航
 
-    private var mapView: some View {
-        MapPanel(coordinate: location.coordinate,
-                 heading: location.heading,
-                 speedKmh: location.speedKmh,
-                 hasFix: location.hasFix,
-                 distance: $mapDistance)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    private var mapColumn: some View {
+        VStack(spacing: 10) {
+            MapPanel(coordinate: location.coordinate,
+                     heading: location.heading,
+                     speedKmh: location.speedKmh,
+                     hasFix: location.hasFix,
+                     distance: $mapDistance,
+                     route: navi.route?.coordinates ?? [],
+                     destination: navi.route?.destination,
+                     onSearch: { showSearch = true })
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            RouteBar(navi: navi) { showSearch = true }
+        }
     }
 }
