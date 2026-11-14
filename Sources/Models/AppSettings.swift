@@ -91,6 +91,9 @@ final class AppSettings: ObservableObject {
     @Published var autoCheckUpdate: Bool { didSet { d.set(autoCheckUpdate, forKey: "auto_update") } }
     @Published var updateManifestURL: String { didSet { d.set(updateManifestURL, forKey: "update_url") } }
 
+    // ── 蓝牙日志 ──
+    @Published var btLogEnabled: Bool { didSet { d.set(btLogEnabled, forKey: "bt_log_enabled") } }
+
     init() {
         let ud = UserDefaults.standard
         let chem = Chemistry(rawValue: ud.string(forKey: "bat_chem") ?? "") ?? .lfp
@@ -108,6 +111,7 @@ final class AppSettings: ObservableObject {
         locationEnabled = ud.object(forKey: "gps_enabled") as? Bool ?? true
         autoCheckUpdate = ud.object(forKey: "auto_update") as? Bool ?? true
         updateManifestURL = ud.string(forKey: "update_url") ?? ""
+        btLogEnabled = ud.object(forKey: "bt_log_enabled") as? Bool ?? true
     }
 
     // ── 派生值 ──

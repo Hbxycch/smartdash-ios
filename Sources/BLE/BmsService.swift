@@ -59,6 +59,7 @@ final class BmsService: NSObject, ObservableObject {
     private var central: CBCentralManager!
     private var peripheral: CBPeripheral?
     private var writeChar: CBCharacteristic?
+    private var notifyChar: CBCharacteristic?
     private var jk: JkBmsParser?
     private var ant: AntBmsParser?
     private var vendor: BatteryVendor = .jikong
@@ -74,6 +75,7 @@ final class BmsService: NSObject, ObservableObject {
     override init() {
         super.init()
         central = CBCentralManager(delegate: self, queue: .main)
+        BtLog.log("===== 会话开始 =====")
     }
 
     // ── 对外操作 ──
@@ -83,6 +85,7 @@ final class BmsService: NSObject, ObservableObject {
         stopDemo()
         devices = []
         wantScan = true
+        BtLog.log("开始扫描 厂家=\(vendor == .ant ? "蚂蚁" : "极空") 全部设备=\(showAllDevices)")
         switch central.state {
         case .poweredOn:
             rescan()
@@ -115,6 +118,7 @@ final class BmsService: NSObject, ObservableObject {
         p.delegate = self
         state = .connecting(device.name)
         sourceLabel = device.name
+        BtLog.log("发起连接 \(device.name) rssi=\(device.rssi)")
         central.connect(p, options: nil)
     }
 
@@ -122,9 +126,11 @@ final class BmsService: NSObject, ObservableObject {
         manualDisconnect = true
         stopDemo()
         stopTimers()
+        BtLog.log("主动断开 \(peripheral?.name ?? "")")
         if let p = peripheral { central.cancelPeripheralConnection(p) }
         peripheral = nil
         writeChar = nil
+        notifyChar = nil
         jk = nil
         ant = nil
         snapshot = BmsSnapshot()
@@ -168,6 +174,7 @@ final class BmsService: NSObject, ObservableObject {
     private func sendReadyCommands() {
         guard let p = peripheral, let ch = writeChar else { return }
         let cmds = jk?.readyCommands() ?? ant?.readyCommands() ?? []
+        BtLog.log("发送就绪命令 \(cmds.count) 条")
         for (i, c) in cmds.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15 * Double(i)) { [weak self] in
                 self?.write(c, to: p, ch: ch)
@@ -182,6 +189,7 @@ final class BmsService: NSObject, ObservableObject {
         guard let ant, let p = peripheral, let ch = writeChar else { return }
         let period = ant.pollPeriod
         guard period > 0, let cmd = ant.pollCommand() else { return }
+        BtLog.log("启动轮询 周期=\(period)s 命令=\(BtLog.hex(cmd))")
         pollTimer = Timer.scheduledTimer(withTimeInterval: period, repeats: true) { [weak self] _ in
             self?.write(cmd, to: p, ch: ch)
         }
@@ -193,6 +201,7 @@ final class BmsService: NSObject, ObservableObject {
         watchdog = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { [weak self] _ in
             guard let self else { return }
             if !self.snapshot.hasData {
+                BtLog.log("看门狗超时：8s 未收到任何可解析数据")
                 self.state = .failed("已连接但收不到数据：密码可能错误，或该设备不是所选厂家协议")
             }
         }
@@ -200,6 +209,7 @@ final class BmsService: NSObject, ObservableObject {
 
     private func write(_ bytes: [UInt8], to p: CBPeripheral, ch: CBCharacteristic) {
         let type: CBCharacteristicWriteType = ch.properties.contains(.writeWithoutResponse) ? .withoutResponse : .withResponse
+        BtLog.log("TX →\(ch.uuid) [\(type == .withoutResponse ? "noRsp" : "rsp")] \(BtLog.hex(bytes))")
         p.writeValue(Data(bytes), for: ch, type: type)
     }
 
@@ -209,7 +219,10 @@ final class BmsService: NSObject, ObservableObject {
         watchdog?.invalidate()
         watchdog = nil
         let name = peripheral?.name ?? sourceLabel
-        if !name.isEmpty, state != .streaming(name) { state = .streaming(name) }
+        if !name.isEmpty, state != .streaming(name) {
+            BtLog.log("首次解析成功 → 进入数据流 \(name)")
+            state = .streaming(name)
+        }
     }
 
     private func stopTimers() {
@@ -263,6 +276,7 @@ extension BmsService: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        BtLog.log("已连接 \(peripheral.name ?? "?")，开始发现服务")
         state = .connected(peripheral.name ?? "设备")
         peripheral.delegate = self
         peripheral.discoverServices([Self.serviceUUID])
@@ -272,6 +286,7 @@ extension BmsService: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager,
                         didFailToConnect peripheral: CBPeripheral,
                         error: Error?) {
+        BtLog.log("连接失败 \(error?.localizedDescription ?? "未知原因")")
         state = .failed("连接失败：\(error?.localizedDescription ?? "未知原因")")
         stopTimers()
     }
@@ -281,8 +296,10 @@ extension BmsService: CBCentralManagerDelegate {
                         error: Error?) {
         stopTimers()
         writeChar = nil
+        notifyChar = nil
         if manualDisconnect { manualDisconnect = false; return }   // 主动断开不报错
         if isDemo { return }
+        BtLog.log("意外断开 \(error?.localizedDescription ?? "无错误")")
         state = .failed(error == nil ? "连接已断开" : "连接断开：\(error!.localizedDescription)")
     }
 }
@@ -293,30 +310,59 @@ extension BmsService: CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard error == nil else {
+            BtLog.log("发现服务失败 \(error!.localizedDescription)")
             state = .failed("发现服务失败：\(error!.localizedDescription)")
             return
         }
+        let svcUuids = peripheral.services?.map { $0.uuid.uuidString } ?? []
+        BtLog.log("发现服务 \(svcUuids.joined(separator: ","))")
         guard let svc = peripheral.services?.first(where: { $0.uuid == Self.serviceUUID }) else {
+            BtLog.log("无 FFE0 服务，断开")
             state = .failed("该设备没有 FFE0 服务，可能不是 JK/蚂蚁保护板")
             central.cancelPeripheralConnection(peripheral)
             return
         }
-        peripheral.discoverCharacteristics([Self.charUUID], for: svc)
+        // 不带过滤发现全部特征：蚂蚁的 FFE0 下有两个同名 FFE1（一个只写、一个只通知），
+        // 必须全部拿到后按属性区分，不能按顺序猜
+        peripheral.discoverCharacteristics(nil, for: svc)
     }
 
     func peripheral(_ peripheral: CBPeripheral,
                     didDiscoverCharacteristicsFor service: CBService,
                     error: Error?) {
         guard error == nil else {
+            BtLog.log("发现特征失败 \(error!.localizedDescription)")
             state = .failed("发现特征失败：\(error!.localizedDescription)")
             return
         }
-        guard let ch = service.characteristics?.first(where: { $0.uuid == Self.charUUID }) else {
+        let chars = service.characteristics ?? []
+        for c in chars {
+            var props: [String] = []
+            if c.properties.contains(.read) { props.append("read") }
+            if c.properties.contains(.write) { props.append("write") }
+            if c.properties.contains(.writeWithoutResponse) { props.append("writeNoRsp") }
+            if c.properties.contains(.notify) { props.append("notify") }
+            BtLog.log("特征 \(c.uuid.uuidString) [\(props.joined(separator: "|"))]")
+        }
+
+        // 按属性挑：写特征要有 write/writeWithoutResponse，通知特征要有 notify
+        var wch: CBCharacteristic?
+        var nch: CBCharacteristic?
+        for c in chars where c.uuid == Self.charUUID {
+            if wch == nil && (c.properties.contains(.write) || c.properties.contains(.writeWithoutResponse)) { wch = c }
+            if nch == nil && c.properties.contains(.notify) { nch = c }
+        }
+        // 单特征设备兜底（与 Android 端逻辑一致）
+        if wch == nil { wch = nch }
+        if nch == nil { nch = wch }
+        guard let w = wch, let n = nch else {
+            BtLog.log("无可用 FFE1 特征，断开")
             state = .failed("该设备没有 FFE1 特征")
             central.cancelPeripheralConnection(peripheral)
             return
         }
-        writeChar = ch
+        writeChar = w
+        notifyChar = n
         // 按厂家建立解析器
         if vendor == .ant {
             let p = AntBmsParser()
@@ -327,17 +373,20 @@ extension BmsService: CBPeripheralDelegate {
             jk = p
             ant = nil
         }
-        peripheral.setNotifyValue(true, for: ch)
+        BtLog.log("写特征=\(w.uuid.uuidString) 通知特征=\(n.uuid.uuidString) 订阅通知")
+        peripheral.setNotifyValue(true, for: n)
     }
 
     func peripheral(_ peripheral: CBPeripheral,
                     didUpdateNotificationStateFor characteristic: CBCharacteristic,
                     error: Error?) {
         if let error {
+            BtLog.log("订阅通知失败 \(error.localizedDescription)")
             state = .failed("订阅通知失败：\(error.localizedDescription)")
             return
         }
         if characteristic.isNotifying {
+            BtLog.log("订阅成功 \(characteristic.uuid.uuidString)")
             sendReadyCommands()
         }
     }
@@ -345,9 +394,17 @@ extension BmsService: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral,
                     didUpdateValueFor characteristic: CBCharacteristic,
                     error: Error?) {
-        guard error == nil, let data = characteristic.value, !data.isEmpty else { return }
+        if let error {
+            BtLog.log("读值错误 \(characteristic.uuid.uuidString) \(error.localizedDescription)")
+            return
+        }
+        guard let data = characteristic.value, !data.isEmpty else { return }
         let bytes = [UInt8](data)
+        BtLog.log("RX ←\(characteristic.uuid.uuidString) \(BtLog.hex(bytes))")
         let s = jk?.feed(bytes) ?? ant?.feed(bytes)
+        if s == nil {
+            BtLog.log("RX 未能解析出快照（缓冲 \(jk?.bufferedCount ?? ant?.bufferedCount ?? 0) 字节）")
+        }
         ingest(s)
     }
 

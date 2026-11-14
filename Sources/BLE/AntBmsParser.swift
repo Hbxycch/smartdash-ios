@@ -23,6 +23,9 @@ final class AntBmsParser {
     private var buf: [UInt8] = []
     private var snapshot = BmsSnapshot()
 
+    /// 当前残留缓冲字节数（日志诊断用）
+    var bufferedCount: Int { buf.count }
+
     func readyCommands() -> [[UInt8]] {
         [Self.buildDeviceRequest(), Self.buildStatusRequest()]
     }

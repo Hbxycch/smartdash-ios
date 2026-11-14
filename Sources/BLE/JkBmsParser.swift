@@ -21,6 +21,9 @@ final class JkBmsParser {
     private static let frameLen = 300
 
     private var buf: [UInt8] = []
+
+    /// 当前残留缓冲字节数（日志诊断用）
+    var bufferedCount: Int { buf.count }
     private var cellShift = 0
     private var snapshot = BmsSnapshot()
     var expectedPassword = ""

@@ -10,6 +10,7 @@ struct SettingsPage: View {
 
     @State private var bgPickerItem: PhotosPickerItem?
     @State private var showConnect = false
+    @State private var showLogPreview = false
 
     var body: some View {
         NavigationStack {
@@ -20,6 +21,7 @@ struct SettingsPage: View {
                 tabsSection
                 mapSection
                 locationSection
+                logSection
                 updateSection
                 aboutSection
             }
@@ -201,6 +203,52 @@ struct SettingsPage: View {
             Text("速度用 GPS 而非轮速，所以隧道内会掉到 0；地图只在有定位时更新。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: - 蓝牙日志
+
+    private var logSection: some View {
+        Section("蓝牙日志") {
+            Toggle("记录蓝牙日志", isOn: $settings.btLogEnabled)
+            HStack {
+                Text("日志文件")
+                Spacer()
+                Text(BtLog.fileSize > 0 ? "\(ByteCountFormatter.string(fromByteCount: Int64(BtLog.fileSize), countStyle: .file))" : "暂无")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+            if BtLog.fileSize > 0 {
+                ShareLink(item: BtLog.fileURL,
+                          subject: Text("蓝牙日志")) {
+                    Label("分享日志文件", systemImage: "square.and.arrow.up")
+                }
+                Button {
+                    showLogPreview = true
+                } label: {
+                    Label("查看最近日志", systemImage: "doc.text.magnifyingglass")
+                }
+                Button(role: .destructive) {
+                    BtLog.clear()
+                } label: {
+                    Label("清空日志", systemImage: "trash")
+                }
+            }
+            Text("连接保护板时的每一步（扫描、连接、特征、收发的原始数据、解析结果）都会记录到日志。连不上时把日志文件发出来即可定位问题。")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
+        .sheet(isPresented: $showLogPreview) {
+            NavigationStack {
+                ScrollView {
+                    Text(BtLog.tailLines(200))
+                        .font(.system(size: 11, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                .navigationTitle("最近 200 行")
+                .navigationBarTitleDisplayMode(.inline)
+            }
         }
     }
 
