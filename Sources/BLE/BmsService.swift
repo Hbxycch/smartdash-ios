@@ -54,7 +54,7 @@ final class BmsService: NSObject, ObservableObject {
     @Published private(set) var state: LinkState = .idle
     @Published private(set) var devices: [DiscoveredDevice] = []
     @Published private(set) var snapshot = BmsSnapshot()
-    @Published private(set) var sourceLabel = "未连接"
+    @Published private(set) var sourceLabel = "BMS 未连接"
     @Published private(set) var lastRSSI: Int = 0
     @Published var showAllDevices = false { didSet { if case .scanning = state { rescan() } } }
 
@@ -154,7 +154,7 @@ final class BmsService: NSObject, ObservableObject {
         jk = nil
         ant = nil
         snapshot = BmsSnapshot()
-        sourceLabel = "未连接"
+        sourceLabel = "BMS 未连接"
         state = .idle
     }
 

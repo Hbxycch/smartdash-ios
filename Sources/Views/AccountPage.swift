@@ -44,7 +44,7 @@ struct AccountPage: View {
                     Button("关闭") { dismiss() }
                 }
             }
-            .onAppear { loadPolicy() }
+            .onAppear { loadPolicy(); refreshMe() }
             .alert("退出登录", isPresented: $showLogoutConfirm) {
                 Button("退出", role: .destructive) { logout() }
                 Button("取消", role: .cancel) {}
@@ -196,6 +196,35 @@ struct AccountPage: View {
                 policy = try await AccountApi.passwordPolicy(base: base)
             } catch {
                 // 取不到就用默认规则，不打扰用户
+            }
+        }
+    }
+
+    /// 进页面拉一次最新账号态（与 Android AccountActivity.refreshMe 同口径）：
+    /// 试用天数、本机绑定车辆名。激活完从设置页回来能立刻变对；
+    /// 已激活的设备再进来也能同步到最新归属。失败沿用本地缓存。
+    private func refreshMe() {
+        let base = cloud.normalizedBaseURL
+        guard settings.isUserLoggedIn, !base.isEmpty else { return }
+        let no = cloud.deviceNo
+        Task {
+            do {
+                let me = try await AccountApi.me(base: base, token: settings.userToken, deviceNo: no)
+                await MainActor.run {
+                    if let u = me["user"] as? [String: Any],
+                       let trial = u["trialDaysLeft"] as? Int, trial >= 0 {
+                        settings.userTrialDays = trial
+                    }
+                    var boundName = ""
+                    if let dev = me["device"] as? [String: Any], dev["bound"] as? Bool == true,
+                       let v = dev["vehicle"] as? [String: Any],
+                       let model = v["model"] as? String {
+                        boundName = model
+                    }
+                    settings.boundVehicle = boundName
+                }
+            } catch {
+                // 网络失败就沿用本地缓存
             }
         }
     }

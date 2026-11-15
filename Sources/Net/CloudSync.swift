@@ -513,6 +513,7 @@ final class CloudSync: ObservableObject {
             backoffUntil = .distantPast
             phase = .ready
             statusText = "已激活，设备号 \(deviceNo)"
+            refreshUserState()      // 激活成功异步刷 /me：绑定车辆名 + 试用天数立即变对
         } catch {
             phase = .failed(error.localizedDescription)
             statusText = "激活失败：\(error.localizedDescription)"
@@ -526,6 +527,33 @@ final class CloudSync: ObservableObject {
         guard Date() >= enrollRetryAfter else { return }
         enrollRetryAfter = Date().addingTimeInterval(30)   // 失败也别每秒重试
         Task { await enroll() }
+    }
+
+    /// 激活成功后刷新账号态（与 Android CloudSync.refreshUserState 同口径）：
+    /// 拉一次 /me，把剩余试用天数与本机绑定车辆名写回偏好。
+    /// 失败静默——只是刷新展示，不影响激活结果；SwiftUI 会随 @Published 自动重绘。
+    private func refreshUserState() {
+        guard let settings, !settings.userToken.isEmpty else { return }
+        let base = normalizedBaseURL
+        let no = deviceNo
+        Task { @MainActor in
+            do {
+                let me = try await AccountApi.me(base: base, token: settings.userToken, deviceNo: no)
+                if let u = me["user"] as? [String: Any],
+                   let trial = u["trialDaysLeft"] as? Int, trial >= 0 {
+                    settings.userTrialDays = trial
+                }
+                var boundName = ""
+                if let dev = me["device"] as? [String: Any], dev["bound"] as? Bool == true,
+                   let v = dev["vehicle"] as? [String: Any],
+                   let model = v["model"] as? String {
+                    boundName = model
+                }
+                settings.boundVehicle = boundName
+            } catch {
+                // 网络失败沿用本地缓存，不打扰用户
+            }
+        }
     }
 
     // MARK: - 杂项

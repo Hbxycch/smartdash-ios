@@ -105,6 +105,27 @@ struct RootView: View {
 
             Spacer(minLength: 4)
 
+            // 控制器连接状态胶囊：远驱已接入（连接逻辑开发中，当前恒为未连接），
+            // 其余厂家未接入。点击进设置改厂家；SwiftUI 响应式绑定，改完自动刷新
+            Button {
+                showSettings = true
+            } label: {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(p.textSecondary.opacity(0.55))
+                        .frame(width: 7, height: 7)
+                    Text(ctrlPillText)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(p.textSecondary)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(p.panel.opacity(0.9)))
+                .overlay(Capsule().stroke(p.stroke, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+
             Button {
                 showConnect = true
             } label: {
@@ -139,6 +160,11 @@ struct RootView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(p.bg.opacity(settings.backgroundImageURL == nil ? 0.9 : 0.35))
+    }
+
+    private var ctrlPillText: String {
+        let v = settings.controllerVendor
+        return v.supported ? "控制器未连接" : "\(v.label)控制器未接入"
     }
 
     private var statusColor: Color {
