@@ -22,10 +22,12 @@ struct SettingsPage: View {
                 appearanceSection
                 batterySection
                 sourceSection
+                controllerSection
                 tabsSection
                 gaugeSection
                 mapSection
                 locationSection
+                accountSection
                 navSection
                 logSection
                 cloudSection
@@ -176,6 +178,72 @@ struct SettingsPage: View {
             Text("极空与蚂蚁都用 FFE0/FFE1 透传特征。切换厂家后需要重新连接。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: - 控制器厂家
+
+    private var controllerSection: some View {
+        Section {
+            Picker("控制器厂家", selection: $settings.controllerVendor) {
+                ForEach(ControllerVendor.allCases) { v in
+                    Text(v.supported ? v.label : "\(v.label) · \(v.stateText)").tag(v)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text(controllerHint)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        } header: {
+            Text("控制器")
+        } footer: {
+            Text("控制器的车速、转速与温度数据按厂家协议解析。智科 / 凌博 / 蓝德在适配中，接入后即可选择。")
+        }
+    }
+
+    private var controllerHint: String {
+        switch settings.controllerVendor {
+        case .fardriver:
+            return "远驱已接入：控制器数据参与车速、转速与温度展示。"
+        case .zhike:
+            return "智科协议开发中：接入前控制器数据不参与展示，先选远驱继续用。"
+        case .lingbo:
+            return "凌博协议开发中：接入前控制器数据不参与展示，先选远驱继续用。"
+        case .lande:
+            return "蓝德协议开发中：接入前控制器数据不参与展示，先选远驱继续用。"
+        }
+    }
+
+    // MARK: - 用户账号
+
+    @State private var showAccount = false
+
+    private var accountSection: some View {
+        Section {
+            Button {
+                showAccount = true
+            } label: {
+                HStack {
+                    Label("用户账号", systemImage: "person.crop.circle")
+                    Spacer()
+                    Text(settings.isUserLoggedIn
+                         ? "已登录：\(settings.userName)"
+                         : (settings.userTrialDays > 0 ? "试用剩 \(settings.userTrialDays) 天" : "未注册 · 点此创建账号或登录"))
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
+            }
+        } footer: {
+            Text("注册自动获得 7 天免费试用；激活码与用户绑定、数据与设备绑定，一个账号可添加多辆车。")
+        }
+        .sheet(isPresented: $showAccount) {
+            AccountPage()
+                .environmentObject(settings)
+                .environmentObject(cloud)
         }
     }
 

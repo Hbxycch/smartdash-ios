@@ -52,6 +52,23 @@ enum MapTheme: String, CaseIterable, Identifiable {
     }
 }
 
+/// 控制器厂家：远驱已接入（数据参与车速/转速/温度展示），
+/// 其余三家仅先预留选项，接入前显示「开发中」。
+enum ControllerVendor: String, CaseIterable, Identifiable {
+    case fardriver, zhike, lingbo, lande
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .fardriver: return "远驱"
+        case .zhike: return "智科"
+        case .lingbo: return "凌博"
+        case .lande: return "蓝德"
+        }
+    }
+    var supported: Bool { self == .fardriver }
+    var stateText: String { supported ? "已接入" : "开发中" }
+}
+
 /// 全部偏好设置：UserDefaults 持久化，改动立刻写盘。
 /// SwiftUI 侧用 @EnvironmentObject 注入，@Published 变化直接驱动刷新。
 final class AppSettings: ObservableObject {
@@ -87,6 +104,20 @@ final class AppSettings: ObservableObject {
     // ── 仪表控制：样式 1（经典）已实现，样式 2/3 预留 ──
     @Published var gaugeStyle: Int { didSet { d.set(gaugeStyle, forKey: "gauge_style") } }
 
+    // ── 控制器厂家 ──
+    @Published var controllerVendor: ControllerVendor { didSet { d.set(controllerVendor.rawValue, forKey: "ctrl_vendor") } }
+
+    // ── 用户账号（注册/登录会话）──
+    @Published var userToken: String { didSet { d.set(userToken, forKey: "user_token") } }
+    @Published var userName: String { didSet { d.set(userName, forKey: "user_name") } }
+    @Published var userTrialDays: Int { didSet { d.set(userTrialDays, forKey: "user_trial_days") } }
+    /// 本机绑定车辆名（登录接口返回的 vehicle.model），空 = 未绑定
+    @Published var boundVehicle: String { didSet { d.set(boundVehicle, forKey: "bound_vehicle") } }
+    /// 车型（注册时填写，回传 model 字段用），空 = 用默认值
+    @Published var deviceModelHint: String { didSet { d.set(deviceModelHint, forKey: "device_model_hint") } }
+
+    var isUserLoggedIn: Bool { !userToken.isEmpty }
+
     // ── 定位 ──
     @Published var locationEnabled: Bool { didSet { d.set(locationEnabled, forKey: "gps_enabled") } }
 
@@ -112,6 +143,12 @@ final class AppSettings: ObservableObject {
         mapTheme = MapTheme(rawValue: ud.string(forKey: "map_theme") ?? "") ?? .auto
         headingUp = ud.object(forKey: "map_heading_up") as? Bool ?? true
         gaugeStyle = ud.object(forKey: "gauge_style") as? Int ?? 1
+        controllerVendor = ControllerVendor(rawValue: ud.string(forKey: "ctrl_vendor") ?? "") ?? .fardriver
+        userToken = ud.string(forKey: "user_token") ?? ""
+        userName = ud.string(forKey: "user_name") ?? ""
+        userTrialDays = ud.object(forKey: "user_trial_days") as? Int ?? 0
+        boundVehicle = ud.string(forKey: "bound_vehicle") ?? ""
+        deviceModelHint = ud.string(forKey: "device_model_hint") ?? ""
         locationEnabled = ud.object(forKey: "gps_enabled") as? Bool ?? true
         autoCheckUpdate = ud.object(forKey: "auto_update") as? Bool ?? true
         // 升级清单出厂预填：清空后回落默认，保证「启动时检查更新」开箱可用

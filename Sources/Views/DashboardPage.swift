@@ -137,7 +137,9 @@ struct DashboardPage: View {
             Divider().frame(height: 18).overlay(p.stroke)
             infoItem(value: location.hasFix ? String(format: "%.0f", location.altitude) : "--", label: "海拔 m", palette: p)
             Divider().frame(height: 18).overlay(p.stroke)
-            infoItem(value: "F -- / B --", label: "制动", palette: p)
+            infoItem(value: Odometer.shared.todayText, label: "今日 km", palette: p)
+            Divider().frame(height: 18).overlay(p.stroke)
+            infoItem(value: Odometer.shared.totalText, label: "总计 km", palette: p)
         }
         .padding(.vertical, 6)
         .background(

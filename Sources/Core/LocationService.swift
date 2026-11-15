@@ -76,6 +76,8 @@ extension LocationService: CLLocationManagerDelegate {
         let kmh = max(0, loc.speed) * 3.6
         speedKmh = kmh.isFinite ? kmh : 0
         if loc.course >= 0 { heading = loc.course }
+        // 里程：GPS 速度积分（低/超速防漂移规则在 Odometer 内）
+        Odometer.shared.feed(kmh: speedKmh, at: loc.timestamp)
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {

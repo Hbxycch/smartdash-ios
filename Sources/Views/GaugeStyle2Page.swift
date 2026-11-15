@@ -165,6 +165,13 @@ struct GaugeStyle2Page: View {
                     .font(.system(size: 12, weight: .medium))
                     .monospacedDigit()
                     .foregroundColor(location.hasFix ? p.textSecondary : p.textSecondary.opacity(0.6))
+
+                Divider().frame(height: 14).overlay(p.stroke)
+
+                Text(Odometer.shared.summaryText)
+                    .font(.system(size: 12, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundColor(p.textSecondary)
             }
         }
     }

@@ -456,12 +456,18 @@ final class CloudSync: ObservableObject {
         statusText = "正在用授权码激活…"
 
         do {
+            // 用户登录后上报会带用户身份：激活码校验 issued_user_id，
+            // 设备归属（owner_user_id）也在这里落库——数据跟设备走，登录只决定可见性
+            let userToken = settings?.userToken ?? ""
             var body: [String: Any] = [
                 "code": trimmed,
                 "device_no": deviceNo,
-                "model": "SmartDash-T3",
+                // 注册时填了车型就用它，否则用默认
+                "model": (settings?.deviceModelHint.isEmpty ?? true)
+                    ? "SmartDash-T3" : (settings?.deviceModelHint ?? "SmartDash-T3"),
                 "bms_vendor": settings?.vendor.rawValue ?? "ant",
                 "platform": "ios",
+                "device_fp": AccountApi.fingerprint(),
             ]
             if let fw = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
                 body["fw_version"] = fw
@@ -472,6 +478,9 @@ final class CloudSync: ObservableObject {
             req.httpMethod = "POST"
             req.timeoutInterval = 20
             req.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            if !userToken.isEmpty {
+                req.setValue("Bearer \(userToken)", forHTTPHeaderField: "Authorization")
+            }
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
             let (data, resp) = try await session.data(for: req)
@@ -556,6 +565,7 @@ final class CloudSync: ObservableObject {
         if text.contains("CODE_USED") { return "授权码已被别的设备使用" }
         if text.contains("CODE_EXPIRED") { return "授权码已过期" }
         if text.contains("DEVICE_TAKEN") { return "该设备号已绑定其它授权码，需后台解绑" }
+        if text.contains("DEVICE_OCCUPIED") { return "本机已绑定其它账号的车，不能凭本账号抢占。请让原账号在设置里解绑，或联系管理员转移" }
         return text
     }
 
