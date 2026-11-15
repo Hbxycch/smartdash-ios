@@ -84,6 +84,9 @@ final class AppSettings: ObservableObject {
     @Published var mapTheme: MapTheme { didSet { d.set(mapTheme.rawValue, forKey: "map_theme") } }
     @Published var headingUp: Bool { didSet { d.set(headingUp, forKey: "map_heading_up") } }
 
+    // ── 仪表控制：样式 1（经典）已实现，样式 2/3 预留 ──
+    @Published var gaugeStyle: Int { didSet { d.set(gaugeStyle, forKey: "gauge_style") } }
+
     // ── 定位 ──
     @Published var locationEnabled: Bool { didSet { d.set(locationEnabled, forKey: "gps_enabled") } }
 
@@ -108,6 +111,7 @@ final class AppSettings: ObservableObject {
         defaultTab = TabKind(rawValue: ud.string(forKey: "tab_default") ?? "") ?? .dashboard
         mapTheme = MapTheme(rawValue: ud.string(forKey: "map_theme") ?? "") ?? .auto
         headingUp = ud.object(forKey: "map_heading_up") as? Bool ?? true
+        gaugeStyle = ud.object(forKey: "gauge_style") as? Int ?? 1
         locationEnabled = ud.object(forKey: "gps_enabled") as? Bool ?? true
         autoCheckUpdate = ud.object(forKey: "auto_update") as? Bool ?? true
         // 升级清单出厂预填：清空后回落默认，保证「启动时检查更新」开箱可用

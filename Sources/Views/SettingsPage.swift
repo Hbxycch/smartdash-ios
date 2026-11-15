@@ -23,6 +23,7 @@ struct SettingsPage: View {
                 batterySection
                 sourceSection
                 tabsSection
+                gaugeSection
                 mapSection
                 locationSection
                 navSection
@@ -191,6 +192,22 @@ struct SettingsPage: View {
                 }
             }
             Text("至少保留一个页签；关掉的页签不会出现在顶栏。")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: - 仪表控制
+
+    private var gaugeSection: some View {
+        Section("仪表控制") {
+            Picker("仪表样式", selection: $settings.gaugeStyle) {
+                Text("样式 1").tag(1)
+                Text("样式 2").tag(2)
+                Text("样式 3").tag(3)
+            }
+            .pickerStyle(.segmented)
+            Text("样式 1 为当前经典版式；样式 2 / 3 后续版本提供，选择后暂按样式 1 显示。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }
