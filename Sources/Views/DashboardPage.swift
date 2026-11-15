@@ -14,25 +14,30 @@ struct DashboardPage: View {
 
     var body: some View {
         GeometryReader { geo in
-            let wide = geo.size.width > geo.size.height * 1.15
-            let readout = BmsReadout(snapshot: service.snapshot, settings: settings)
+            // 仪表样式 2：三栏仪表（左列读数 / 中间弧形码表 / 右列控制器温度），无地图区
+            if settings.gaugeStyle == 2 {
+                GaugeStyle2Page()
+            } else {
+                let wide = geo.size.width > geo.size.height * 1.15
+                let readout = BmsReadout(snapshot: service.snapshot, settings: settings)
 
-            Group {
-                if wide {
-                    HStack(alignment: .top, spacing: 12) {
-                        gaugeColumn(readout, gaugeHeight: min(geo.size.height * 0.42, 250))
-                            .frame(width: geo.size.width * 0.42)
-                        mapColumn
-                    }
-                } else {
-                    VStack(spacing: 12) {
-                        gaugeColumn(readout, gaugeHeight: min(geo.size.height * 0.30, 210))
-                        mapColumn
-                            .frame(height: geo.size.height * 0.46)
+                Group {
+                    if wide {
+                        HStack(alignment: .top, spacing: 12) {
+                            gaugeColumn(readout, gaugeHeight: min(geo.size.height * 0.42, 250))
+                                .frame(width: geo.size.width * 0.42)
+                            mapColumn
+                        }
+                    } else {
+                        VStack(spacing: 12) {
+                            gaugeColumn(readout, gaugeHeight: min(geo.size.height * 0.30, 210))
+                            mapColumn
+                                .frame(height: geo.size.height * 0.46)
+                        }
                     }
                 }
+                .padding(12)
             }
-            .padding(12)
         }
         .onAppear { CrashLogger.mark("仪表页加载") }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now = $0 }

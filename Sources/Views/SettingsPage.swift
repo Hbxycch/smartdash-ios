@@ -207,7 +207,7 @@ struct SettingsPage: View {
                 Text("样式 3").tag(3)
             }
             .pickerStyle(.segmented)
-            Text("样式 1 为当前经典版式；样式 2 / 3 后续版本提供，选择后暂按样式 1 显示。")
+            Text("样式 1 经典版式（码表 + 地图）；样式 2 三栏仪表（电量/电压/电流/温度 + 弧形码表）。样式 3 后续版本提供。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }
