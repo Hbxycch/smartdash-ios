@@ -287,20 +287,32 @@ struct StripeBar: View {
                             cornerRadius: radius, style: .continuous)
             let pitch: CGFloat = 11, thick: CGFloat = 7
 
-            func stripes(_ color: Color) {
+            // 画条纹；region 限定条纹可见区段（底纹=整条，填充=按比例的下/左段）
+            func stripes(_ color: Color, region: CGRect) {
                 ctx.stroke(Path { path in
                     if vertical {
+                        let boundary = region.minY          // 该线以下才算已填充
                         var y = size.height - pitch / 2
                         while y > -pitch {
-                            path.move(to: CGPoint(x: thick / 2, y: y))
-                            path.addLine(to: CGPoint(x: size.width - thick / 2, y: y))
+                            let top = y - thick / 2
+                            if top >= boundary - 0.5 {
+                                path.move(to: CGPoint(x: thick / 2, y: y))
+                                path.addLine(to: CGPoint(x: size.width - thick / 2, y: y))
+                            } else if y + thick / 2 > boundary {
+                                // 跨过分档线的最后一格：只画分档线以下的部分
+                                path.move(to: CGPoint(x: thick / 2, y: boundary))
+                                path.addLine(to: CGPoint(x: size.width - thick / 2, y: y))
+                            }
                             y -= pitch
                         }
                     } else {
+                        let right = region.maxX             // 该线以左才算已填充
                         var x = pitch / 2
                         while x < size.width + pitch {
-                            path.move(to: CGPoint(x: x, y: thick / 2))
-                            path.addLine(to: CGPoint(x: x, y: size.height - thick / 2))
+                            if x <= right + 0.5 {
+                                path.move(to: CGPoint(x: x, y: thick / 2))
+                                path.addLine(to: CGPoint(x: x, y: size.height - thick / 2))
+                            }
                             x += pitch
                         }
                     }
@@ -308,20 +320,13 @@ struct StripeBar: View {
             }
 
             ctx.clip(to: clip)
-            stripes(track)
-
-            // 已填充部分：裁出比例区段再画同款条纹，相位对齐，看起来像"点亮"
-            ctx.saveGState()
-            var fill = clip
-            if vertical {
-                fill.addRect(CGRect(x: 0, y: size.height * (1 - ratio),
-                                    width: size.width, height: size.height * ratio))
-            } else {
-                fill.addRect(CGRect(x: 0, y: 0, width: size.width * ratio, height: size.height))
+            stripes(track, region: CGRect(origin: .zero, size: size))
+            if ratio > 0.002 {
+                let fillRegion = vertical
+                    ? CGRect(x: 0, y: size.height * (1 - ratio), width: size.width, height: size.height * ratio)
+                    : CGRect(x: 0, y: 0, width: size.width * ratio, height: size.height)
+                stripes(tint, region: fillRegion)
             }
-            ctx.clip(to: fill)
-            stripes(tint)
-            ctx.restoreGState()
 
             // 阈值刻度（画在条纹之上，横向贯穿）
             for (pos, color) in marks {
@@ -369,8 +374,9 @@ struct ArcDial: View {
             let k = min(size.width, size.height) / 264
 
             func point(_ deg: Double, radius: CGFloat) -> CGPoint {
-                let a = deg * .pi / 180
-                return CGPoint(x: center.x + cos(a) * radius, y: center.y + sin(a) * radius)
+                let a = CGFloat(deg) * .pi / 180
+                let s = CGFloat(sin(Double(a))), cs = CGFloat(cos(Double(a)))
+                return CGPoint(x: center.x + cs * radius, y: center.y + s * radius)
             }
 
             // 与 GaugeView 一致：采样点连折线画弧，规避 clockwise 在不同坐标系下的方向歧义
