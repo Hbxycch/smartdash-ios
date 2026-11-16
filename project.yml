@@ -1,7 +1,7 @@
 # XcodeGen 工程描述文件。
 # 本机不需要装 Xcode：GitHub Actions 的 macOS 机器会执行 `xcodegen generate` 生成 .xcodeproj 再编译。
 # 改了源文件目录结构、Info.plist 权限、bundle id、版本号，都改这里，不要手改 .xcodeproj。
-# 工程名 SmartDash（仪表台）；应用对外显示名仍是「智能车机」，见 CFBundleDisplayName。
+# 工程名 SmartDash（仪表台）；应用对外显示名是「智能仪表」，见 CFBundleDisplayName。
 name: SmartDash
 
 options:
@@ -40,8 +40,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.smartdash.monitor.ios
         PRODUCT_NAME: SmartDash
-        MARKETING_VERSION: "4.16"
-        CURRENT_PROJECT_VERSION: "56"
+        MARKETING_VERSION: "4.17"
+        CURRENT_PROJECT_VERSION: "57"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         SUPPORTS_MACCATALYST: NO
@@ -54,7 +54,7 @@ targets:
     info:
       path: Support/Info.plist
       properties:
-        CFBundleDisplayName: 智能车机
+        CFBundleDisplayName: 智能仪表
         CFBundleName: SmartDash
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

@@ -622,7 +622,7 @@ struct SettingsPage: View {
                 Text("JK02 / ANT-BLE")
                     .foregroundColor(.secondary)
             }
-            Text("智能车机系统 · iOS 版。电池与轨迹默认只在本机处理；只有打开「云同步」并填了授权码，才会加密上报到你自己的服务器。")
+            Text("智能仪表 · iOS 版。电池与轨迹默认只在本机处理；只有打开「云同步」并填了授权码，才会加密上报到你自己的服务器。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }

@@ -76,7 +76,7 @@ struct RootView: View {
     private var topBar: some View {
         let p = settings.palette
         return HStack(spacing: 10) {
-            Text("智能车机系统")
+            Text("智能仪表")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(p.textPrimary)
                 .lineLimit(1)

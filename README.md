@@ -1,10 +1,10 @@
-# 智能车机系统 · iOS 版
+# 智能仪表 · iOS 版
 
 Android 版（`../SmartDash-Android`，Android 工程目录）的功能对等移植：BLE 直连 JK-BMS / ANT-BMS，仪表盘 + 电芯 + 定位三页签，深/浅双主题与自定义背景图，电池化学体系 × 串数换算。
 
 **开发方式：Windows 改代码 → GitHub Actions 的 macOS 机器编译 → 下载 unsigned IPA → 电脑端签名装到 iPhone。**
 
-**命名约定**：代码工程名 / target / scheme = `SmartDash`（仪表台），桌面显示名仍是「智能车机」；Bundle ID = `com.smartdash.monitor.ios`（Android 端 applicationId = `com.smartdash.monitor`，同一品牌 + 平台后缀）。v4.3 起统一，上线后不可再改。
+**命名约定**：代码工程名 / target / scheme = `SmartDash`（仪表台），桌面显示名是「智能仪表」；Bundle ID = `com.smartdash.monitor.ios`（Android 端 applicationId = `com.smartdash.monitor`，同一品牌 + 平台后缀）。v4.3 起统一，上线后不可再改。
 
 Windows 不能编 iOS，所以工程里不放 `.xcodeproj`，改用 `project.yml` + [XcodeGen](https://github.com/yonaskolb/XcodeGen)，由 CI 生成工程再编译。你本地只需要一个能编辑文本的工具。
 
