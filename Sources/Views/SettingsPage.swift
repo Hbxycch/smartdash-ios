@@ -13,6 +13,7 @@ struct SettingsPage: View {
     @State private var bgPickerItem: PhotosPickerItem?
     @State private var showConnect = false
     @State private var showLogPreview = false
+    @State private var showLogPage = false
     @State private var showCrashPreview = false
     @State private var showScanner = false          // 授权码扫码
 
@@ -198,7 +199,7 @@ struct SettingsPage: View {
         } header: {
             Text("控制器")
         } footer: {
-            Text("控制器的车速、转速与温度数据按厂家协议解析。智科 / 凌博 / 蓝德在适配中，接入后即可选择。")
+            Text("智科已接入：顶栏胶囊点开即可扫描控制器，选择设备后自动连接；仪表样式 2 右列显示控制器温度、电机转速、母线电流/电压、相线电流与故障码。凌博 / 蓝德仍在适配中。")
         }
     }
 
@@ -207,11 +208,11 @@ struct SettingsPage: View {
         case .fardriver:
             return "远驱已接入：控制器数据参与车速、转速与温度展示。"
         case .zhike:
-            return "智科协议开发中：接入前控制器数据不参与展示，先选远驱继续用。"
+            return "智科已接入：顶栏控制器胶囊 → 扫描并选择 GEKOO 设备；连上后右列显示温度/转速/母线/相电流/故障码。"
         case .lingbo:
-            return "凌博协议开发中：接入前控制器数据不参与展示，先选远驱继续用。"
+            return "凌博协议开发中：接入前控制器数据不参与展示，先选远驱或智科。"
         case .lande:
-            return "蓝德协议开发中：接入前控制器数据不参与展示，先选远驱继续用。"
+            return "蓝德协议开发中：接入前控制器数据不参与展示，先选远驱或智科。"
         }
     }
 
@@ -376,6 +377,10 @@ struct SettingsPage: View {
                 }
             }
         }
+        .sheet(isPresented: $showLogPage) {
+            BleLogPage()
+                .environmentObject(settings)
+        }
         .sheet(isPresented: $showCrashPreview) {
             NavigationStack {
                 ScrollView {
@@ -408,13 +413,13 @@ struct SettingsPage: View {
                     .foregroundColor(.secondary)
             }
             if BtLog.fileSize > 0 {
-                ShareLink(item: BtLog.fileURL, subject: Text("蓝牙日志")) {
-                    Label("分享日志文件", systemImage: "square.and.arrow.up")
-                }
                 Button {
-                    showLogPreview = true
+                    showLogPage = true
                 } label: {
-                    Label("查看最近日志", systemImage: "doc.text.magnifyingglass")
+                    Label("查看 / 导出连接日志", systemImage: "list.bullet.rectangle")
+                }
+                ShareLink(item: BtLog.fileURL, subject: Text("智能仪表 蓝牙连接日志")) {
+                    Label("分享日志文件", systemImage: "square.and.arrow.up")
                 }
                 Button(role: .destructive) {
                     BtLog.clear()
@@ -422,7 +427,7 @@ struct SettingsPage: View {
                     Label("清空日志", systemImage: "trash")
                 }
             }
-            Text("连接保护板时的每一步（扫描、连接、特征、收发的原始数据、解析结果）都会记录到日志。连不上时把日志文件发出来即可定位问题。")
+            Text("BMS、控制器、扫描三条链路都会记录：扫描、连接、特征订阅、每帧收发与解析结果。连不上时打开「查看 / 导出连接日志」，导出后直接发微信或存到「文件」App 即可。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         } header: {

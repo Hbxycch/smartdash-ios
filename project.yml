@@ -40,8 +40,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.smartdash.monitor.ios
         PRODUCT_NAME: SmartDash
-        MARKETING_VERSION: "4.17"
-        CURRENT_PROJECT_VERSION: "57"
+        MARKETING_VERSION: "4.18"
+        CURRENT_PROJECT_VERSION: "58"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         SUPPORTS_MACCATALYST: NO
@@ -71,7 +71,7 @@ targets:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         # ── 权限说明（缺了会在首次使用时闪退）──
-        NSBluetoothAlwaysUsageDescription: 需要蓝牙与电池保护板（JK-BMS / ANT-BMS）通信，读取总压、电流、单体电压与温度。
+        NSBluetoothAlwaysUsageDescription: 需要蓝牙与电池保护板（JK-BMS / ANT-BMS）及智科控制器通信，读取电压、电流、温度、转速等实时数据。
         NSBluetoothPeripheralUsageDescription: 需要蓝牙与电池保护板通信。
         NSLocationWhenInUseUsageDescription: 用于显示车速、航向与地图导航。
         NSLocationAlwaysAndWhenInUseUsageDescription: 导航过程中需要在锁屏或切后台时继续使用定位，否则路线会中断。
@@ -81,6 +81,9 @@ targets:
         # ── 高德 Key ──
         # 留空则地图搜索不可用（界面会提示未配置）。CI 会用仓库 Secret AMAP_API_KEY 覆盖。
         AMapAPIKey: ""
+        # 允许在「文件」App 里访问 App 沙盒（日志导出后用户可自行拷贝）
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         # ── 后台模式：锁屏/切后台时保持 BLE 与定位 ──
         UIBackgroundModes:
           - bluetooth-central

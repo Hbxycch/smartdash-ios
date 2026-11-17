@@ -11,6 +11,7 @@ struct GaugeStyle2Page: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var service: BmsService
     @EnvironmentObject var location: LocationService
+    @EnvironmentObject var ctrl: ZhikeService
 
     var body: some View {
         GeometryReader { geo in
@@ -198,62 +199,197 @@ struct GaugeStyle2Page: View {
         return "静置"
     }
 
-    // MARK: - 右列：控制器温度
+    // MARK: - 右列：控制器模块（与 Android 样式2 右列同一版式）
+    // 上段 主① 控制器温度（超大数字 + 三档胶囊 + 纵向条纹温度条）
+    // 中段 主② 电机转速（青色大数字 + 分段条 + 量程说明）
+    // 下段 次要 2×2：母线电流 / 母线电压 / 相线电流 / 故障码
 
     private var rightColumn: some View {
+        VStack(spacing: 0) {
+            ctrlTempBlock
+            divider
+            ctrlRpmBlock
+            divider
+            ctrlSecondaryGrid
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(tile)
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(p.stroke.opacity(0.7))
+            .frame(height: 1)
+            .padding(.vertical, 10)
+    }
+
+    // 主① 控制器温度
+    private var ctrlTempBlock: some View {
         let tier = ctrlTier
         let color = tier?.color ?? p.textSecondary
-        let ratio: Double
-        if let t = ctrlTemp { ratio = min(max(t / 100, 0), 1) } else { ratio = 0 }
+        let ratio: Double = ctrlTemp.map { min(max($0 / 100, 0), 1) } ?? 0
 
-        return VStack(spacing: 8) {
+        return VStack(alignment: .leading, spacing: 0) {
             Text("控制器温度")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(p.textSecondary)
 
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(ctrlTemp.map { String(format: "%.0f", $0) } ?? "--")
-                    .font(.system(size: 46, weight: .light, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(color)
-                Text("°C")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(p.textSecondary)
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text(ctrlTemp.map { String(format: "%.1f", $0) } ?? "--")
+                            .font(.system(size: 40, weight: .light, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundColor(ctrlTemp != nil ? color : p.textSecondary)
+                        Text("°C")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(p.textSecondary)
+                    }
+
+                    Text(tier?.text ?? (settings.controllerVendor == .zhike ? ctrlStateShort : "--"))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(tier != nil ? color : p.textSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill((tier != nil ? color : p.textSecondary).opacity(0.12)))
+                        .overlay(Capsule().stroke((tier != nil ? color : p.textSecondary).opacity(0.32), lineWidth: 1))
+                }
+
+                StripeBar(ratio: ratio,
+                          tint: tier?.color ?? p.track,
+                          track: p.track,
+                          vertical: true,
+                          marks: [(0.50, p.warn.opacity(0.5)), (0.75, p.danger.opacity(0.85))])
+                    .frame(width: 18)
+                    .frame(maxHeight: .infinity)
             }
-
-            Text(tier?.text ?? "--")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(color)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(color.opacity(0.12)))
-                .overlay(Capsule().stroke(color.opacity(0.32), lineWidth: 1))
-
-            StripeBar(ratio: ratio,
-                      tint: tier?.color ?? p.track,
-                      track: p.track,
-                      vertical: true,
-                      marks: [(0.50, p.warn.opacity(0.5)), (0.75, p.danger.opacity(0.85))])
-                .frame(width: 18)
-                .frame(maxHeight: .infinity)
-                .padding(.top, 8)
+            .frame(maxHeight: .infinity)
 
             Text("阈值 50 / 75 °C")
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 10))
                 .foregroundColor(p.textSecondary.opacity(0.7))
                 .padding(.top, 6)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 14)
-        .background(tile)
+        .frame(maxHeight: .infinity)
+    }
+
+    // 主② 电机转速
+    private var ctrlRpmBlock: some View {
+        let hasRpm = (zhike?.rpm ?? 0) > 0.5
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("电机转速")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(p.textSecondary)
+                Spacer()
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(hasRpm ? String(format: "%.0f", zhike?.rpm ?? 0) : "--")
+                        .font(.system(size: 26, weight: .light, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(hasRpm ? p.accent : p.textSecondary)
+                    Text("rpm")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(p.textSecondary)
+                }
+            }
+
+            StripeBar(ratio: hasRpm ? min(max((zhike?.rpm ?? 0) / 6000, 0), 1) : 0,
+                      tint: hasRpm ? p.accent : p.track,
+                      track: p.track)
+                .frame(height: 9)
+
+            Text("量程 0 – 6000 rpm")
+                .font(.system(size: 10))
+                .foregroundColor(p.textSecondary.opacity(0.7))
+        }
+    }
+
+    // 次要 2×2
+    private var ctrlSecondaryGrid: some View {
+        let z = zhike
+        let irms = z.map { String(format: "%.0f", $0.busCurrentA) } ?? "--"
+        let volts = (z?.busVoltageV ?? 0) > 0.5 ? String(format: "%.1f", z?.busVoltageV ?? 0) : "--"
+        let phase = z?.phaseCurrentA
+        let phaseText = phase.map { String(format: "%.1f", $0) } ?? "--"
+
+        return VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                ctrlMini(label: "母线电流", value: irms, unit: "A",
+                         color: z != nil ? p.textPrimary : p.textSecondary)
+                ctrlMini(label: "母线电压", value: volts, unit: "V",
+                         color: volts == "--" ? p.textSecondary : p.textPrimary)
+            }
+            HStack(spacing: 10) {
+                ctrlMini(label: "相线电流", value: phaseText, unit: "A",
+                         color: phase != nil ? p.textPrimary : p.textSecondary)
+                ctrlMini(label: "故障码", value: faultText, unit: "", color: faultColor)
+            }
+        }
+    }
+
+    private func ctrlMini(label: String, value: String, unit: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundColor(p.textSecondary)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 19, weight: .light, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if !unit.isEmpty {
+                    Text(unit)
+                        .font(.system(size: 10))
+                        .foregroundColor(p.textSecondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - 数据换算
 
-    /// 控制器温度（MOS 温度），未上报时为 nil
+    /// 智科链路有效数据（3 秒新鲜度）；未接智科时为 nil
+    private var zhike: ZhikeReadout? {
+        guard settings.controllerVendor == .zhike, ctrl.readout.valid else { return nil }
+        return ctrl.readout
+    }
+
+    private var faultText: String {
+        guard let z = zhike else { return "--" }
+        return z.faultBits == 0 ? "正常" : String(format: "0x%04X", z.faultBits)
+    }
+
+    private var faultColor: Color {
+        guard let z = zhike else { return p.textSecondary }
+        return z.faultBits == 0 ? p.ok : p.danger
+    }
+
+    /// 控制器温度：智科优先；未接智科时回退 BMS 上报的 MOS 温度，不丢旧能力
     private var ctrlTemp: Double? {
-        guard snap.hasData, snap.mosTemp.isFinite else { return nil }
-        return snap.mosTemp
+        if let t = zhike?.tempC { return t }
+        if settings.controllerVendor != .zhike, snap.hasData,
+           snap.mosTemp.isFinite, snap.mosTemp > 0 {
+            return snap.mosTemp
+        }
+        return nil
+    }
+
+    /// 胶囊兼任链路状态位（未拿到温度时显示连接进度）
+    private var ctrlStateShort: String {
+        switch ctrl.state {
+        case .idle: return "未连接"
+        case .scanning: return "搜索中"
+        case .connecting: return "连接中"
+        case .connected: return "读取中"
+        case .streaming: return "等待数据"
+        case .reconnecting: return "重连中"
+        case .failed: return "未连接"
+        }
     }
 
     /// 电池温度：优先探头 1，蚂蚁协议只有温度数组时取最高探头

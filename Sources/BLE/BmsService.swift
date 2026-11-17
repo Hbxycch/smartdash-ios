@@ -50,6 +50,7 @@ final class BmsService: NSObject, ObservableObject {
 
     static let serviceUUID = CBUUID(string: "FFE0")
     static let charUUID = CBUUID(string: "FFE1")
+    static let char2UUID = CBUUID(string: "FFE2")
 
     @Published private(set) var state: LinkState = .idle
     @Published private(set) var devices: [DiscoveredDevice] = []
@@ -73,6 +74,12 @@ final class BmsService: NSObject, ObservableObject {
     private var manualDisconnect = false
     private var demoState = DemoState(vendor: .jikong)
     private var found: [UUID: CBPeripheral] = [:]
+    /// 诊断计数：本次连接写了多少帧、被拒多少、收到多少通知（日志里一眼看出卡在哪）
+    private var txCount = 0
+    private var txFail = 0
+    private var rxCount = 0
+    /// 无数据时回退用「需要应答的写」（部分中继只认 Write Request）
+    private var forceResponseWrite = false
 
     // ── 自动重连 ──
     private var reconnectTarget: CBPeripheral?
@@ -83,7 +90,7 @@ final class BmsService: NSObject, ObservableObject {
     override init() {
         super.init()
         central = CBCentralManager(delegate: self, queue: .main)
-        BtLog.log("===== 会话开始 =====")
+        BtLog.bms("===== 会话开始 =====")
     }
 
     // ── 对外操作 ──
@@ -94,7 +101,7 @@ final class BmsService: NSObject, ObservableObject {
         cancelReconnect()
         devices = []
         wantScan = true
-        BtLog.log("开始扫描 厂家=\(vendor == .ant ? "蚂蚁" : "极空") 全部设备=\(showAllDevices)")
+        BtLog.bms("开始扫描 厂家=\(vendor == .ant ? "蚂蚁" : "极空") 全部设备=\(showAllDevices)")
         switch central.state {
         case .poweredOn:
             rescan()
@@ -137,7 +144,7 @@ final class BmsService: NSObject, ObservableObject {
         p.delegate = self
         state = .connecting(device.name)
         sourceLabel = device.name
-        BtLog.log("发起连接 \(device.name) rssi=\(device.rssi)")
+        BtLog.bms("发起连接 \(device.name) rssi=\(device.rssi)")
         central.connect(p, options: nil)
     }
 
@@ -146,7 +153,7 @@ final class BmsService: NSObject, ObservableObject {
         stopDemo()
         stopTimers()
         cancelReconnect()
-        BtLog.log("主动断开 \(peripheral?.name ?? "")")
+        BtLog.bms("主动断开 \(peripheral?.name ?? "")")
         if let p = peripheral { central.cancelPeripheralConnection(p) }
         peripheral = nil
         writeChar = nil
@@ -194,7 +201,7 @@ final class BmsService: NSObject, ObservableObject {
     private func sendReadyCommands() {
         guard let p = peripheral, let ch = writeChar else { return }
         let cmds = jk?.readyCommands() ?? ant?.readyCommands() ?? []
-        BtLog.log("发送就绪命令 \(cmds.count) 条")
+        BtLog.bms("发送就绪命令 \(cmds.count) 条")
         for (i, c) in cmds.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15 * Double(i)) { [weak self] in
                 self?.write(c, to: p, ch: ch)
@@ -209,7 +216,7 @@ final class BmsService: NSObject, ObservableObject {
         guard let ant, let p = peripheral, let ch = writeChar else { return }
         let period = ant.pollPeriod
         guard period > 0, let cmd = ant.pollCommand() else { return }
-        BtLog.log("启动轮询 周期=\(period)s 命令=\(BtLog.hex(cmd))")
+        BtLog.bms("启动轮询 周期=\(period)s 命令=\(BtLog.hex(cmd))")
         pollTimer = Timer.scheduledTimer(withTimeInterval: period, repeats: true) { [weak self] _ in
             self?.write(cmd, to: p, ch: ch)
         }
@@ -218,18 +225,40 @@ final class BmsService: NSObject, ObservableObject {
     /// 建链后 8s 拿不到数据 → 判定密码错误或协议不符
     private func startWatchdog() {
         watchdog?.invalidate()
-        watchdog = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { [weak self] _ in
+        watchdog = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { [weak self] _ in
             guard let self else { return }
             if !self.snapshot.hasData {
-                BtLog.log("看门狗超时：8s 未收到任何可解析数据")
-                self.state = .failed("已连接但收不到数据：密码可能错误，或该设备不是所选厂家协议")
+                BtLog.bms("看门狗超时：10s 未收到可解析数据（写 \(self.txCount) 帧 / 被拒 \(self.txFail) / 通知 \(self.rxCount) 条）")
+                self.state = .failed("已连接但收不到数据：可能是密码错误、设备不是所选厂家协议，或中继只认某种写方式")
+            }
+        }
+        // 3.5s 仍无数据 → 改用「需要应答的写」再试一次，覆盖只认 Write Request 的模块
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
+            guard let self, !self.snapshot.hasData,
+                  let p = self.peripheral, let ch = self.writeChar else { return }
+            self.forceResponseWrite = true
+            let cmd = self.ant?.pollCommand() ?? self.jk?.readyCommands().last ?? []
+            if !cmd.isEmpty {
+                BtLog.bms("仍无数据 → 改用需应答的写重试")
+                self.write(cmd, to: p, ch: ch)
             }
         }
     }
 
     private func write(_ bytes: [UInt8], to p: CBPeripheral, ch: CBCharacteristic) {
-        let type: CBCharacteristicWriteType = ch.properties.contains(.writeWithoutResponse) ? .withoutResponse : .withResponse
-        BtLog.log("TX →\(ch.uuid) [\(type == .withoutResponse ? "noRsp" : "rsp")] \(BtLog.hex(bytes))")
+        let canNoRsp = ch.properties.contains(.writeWithoutResponse)
+        let canRsp = ch.properties.contains(.write)
+        guard canNoRsp || canRsp else {
+            BtLog.bms("写特征不支持写操作 \(ch.uuid.uuidString)")
+            return
+        }
+        let type: CBCharacteristicWriteType =
+            (canNoRsp && !forceResponseWrite) ? .withoutResponse : .withResponse
+        if type == .withoutResponse, !p.canSendWriteWithoutResponse { return }
+        txCount += 1
+        if txCount <= 3 {
+            BtLog.bms("TX →\(ch.uuid) [\(type == .withoutResponse ? "noRsp" : "rsp")] \(BtLog.hex(bytes))")
+        }
         p.writeValue(Data(bytes), for: ch, type: type)
     }
 
@@ -240,7 +269,7 @@ final class BmsService: NSObject, ObservableObject {
         watchdog = nil
         let name = peripheral?.name ?? sourceLabel
         if !name.isEmpty, state != .streaming(name) {
-            BtLog.log("首次解析成功 → 进入数据流 \(name)")
+            BtLog.bms("首次解析成功 → 进入数据流 \(name)")
             // 数据恢复即视为重连成功
             reconnectTimer?.invalidate()
             reconnectTimer = nil
@@ -277,7 +306,7 @@ final class BmsService: NSObject, ObservableObject {
         guard let p = reconnectTarget else { return }
         reconnectAttempts += 1
         let name = p.name ?? sourceLabel
-        BtLog.log("自动重连 第\(reconnectAttempts)次 \(name)")
+        BtLog.bms("自动重连 第\(reconnectAttempts)次 \(name)")
         state = .reconnecting(name, reconnectAttempts)
         peripheral = p
         p.delegate = self
@@ -329,7 +358,7 @@ extension BmsService: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        BtLog.log("已连接 \(peripheral.name ?? "?")，开始发现服务")
+        BtLog.bms("已连接 \(peripheral.name ?? "?")，开始发现服务")
         state = .connected(peripheral.name ?? "设备")
         peripheral.delegate = self
         peripheral.discoverServices([Self.serviceUUID])
@@ -342,12 +371,12 @@ extension BmsService: CBCentralManagerDelegate {
         stopTimers()
         // 自动重连过程中的失败：还有次数就继续排下一次
         if reconnectTarget != nil, reconnectAttempts < maxReconnectAttempts {
-            BtLog.log("重连失败 \(error?.localizedDescription ?? "未知原因")，3s 后再试")
+            BtLog.bms("重连失败 \(error?.localizedDescription ?? "未知原因")，3s 后再试")
             scheduleReconnect()
             return
         }
         cancelReconnect()
-        BtLog.log("连接失败 \(error?.localizedDescription ?? "未知原因")")
+        BtLog.bms("连接失败 \(error?.localizedDescription ?? "未知原因")")
         state = .failed("连接失败：\(error?.localizedDescription ?? "未知原因")")
     }
 
@@ -363,11 +392,11 @@ extension BmsService: CBCentralManagerDelegate {
         // 意外断开（信号差等）：自动重连，最多 5 次，每次间隔 3s
         if reconnectTarget == nil { reconnectTarget = peripheral }  // 首次掉线，锁定重连目标
         if reconnectAttempts < maxReconnectAttempts {
-            BtLog.log("意外断开 \(reason)，3s 后自动重连")
+            BtLog.bms("意外断开 \(reason)，3s 后自动重连")
             state = .reconnecting(peripheral.name ?? sourceLabel, reconnectAttempts + 1)
             scheduleReconnect()
         } else {
-            BtLog.log("意外断开 \(reason)，重试 \(reconnectAttempts) 次仍失败")
+            BtLog.bms("意外断开 \(reason)，重试 \(reconnectAttempts) 次仍失败")
             cancelReconnect()
             state = .failed("蓝牙信号过弱，重连 \(maxReconnectAttempts) 次失败：请靠近保护板后重新连接")
         }
@@ -380,14 +409,14 @@ extension BmsService: CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard error == nil else {
-            BtLog.log("发现服务失败 \(error!.localizedDescription)")
+            BtLog.bms("发现服务失败 \(error!.localizedDescription)")
             state = .failed("发现服务失败：\(error!.localizedDescription)")
             return
         }
         let svcUuids = peripheral.services?.map { $0.uuid.uuidString } ?? []
-        BtLog.log("发现服务 \(svcUuids.joined(separator: ","))")
+        BtLog.bms("发现服务 \(svcUuids.joined(separator: ","))")
         guard let svc = peripheral.services?.first(where: { $0.uuid == Self.serviceUUID }) else {
-            BtLog.log("无 FFE0 服务，断开")
+            BtLog.bms("无 FFE0 服务，断开")
             state = .failed("该设备没有 FFE0 服务，可能不是 JK/蚂蚁保护板")
             central.cancelPeripheralConnection(peripheral)
             return
@@ -401,7 +430,7 @@ extension BmsService: CBPeripheralDelegate {
                     didDiscoverCharacteristicsFor service: CBService,
                     error: Error?) {
         guard error == nil else {
-            BtLog.log("发现特征失败 \(error!.localizedDescription)")
+            BtLog.bms("发现特征失败 \(error!.localizedDescription)")
             state = .failed("发现特征失败：\(error!.localizedDescription)")
             return
         }
@@ -412,27 +441,36 @@ extension BmsService: CBPeripheralDelegate {
             if c.properties.contains(.write) { props.append("write") }
             if c.properties.contains(.writeWithoutResponse) { props.append("writeNoRsp") }
             if c.properties.contains(.notify) { props.append("notify") }
-            BtLog.log("特征 \(c.uuid.uuidString) [\(props.joined(separator: "|"))]")
+            BtLog.bms("特征 \(c.uuid.uuidString) [\(props.joined(separator: "|"))]")
         }
 
-        // 按属性挑：写特征要有 write/writeWithoutResponse，通知特征要有 notify
-        var wch: CBCharacteristic?
-        var nch: CBCharacteristic?
-        for c in chars where c.uuid == Self.charUUID {
-            if wch == nil && (c.properties.contains(.write) || c.properties.contains(.writeWithoutResponse)) { wch = c }
-            if nch == nil && c.properties.contains(.notify) { nch = c }
+        // 按属性挑：写特征优先 FFE1，其次 FFE2 / 服务内任意可写特征（中继模块常把收发放两个特征）；
+        // 通知特征允许 INDICATE（中继只用指示方式推送，之前只认 notify 就会「订阅成功但永远没数据」）
+        func writable(_ c: CBCharacteristic) -> Bool {
+            c.properties.contains(.write) || c.properties.contains(.writeWithoutResponse)
         }
-        // 单特征设备兜底（与 Android 端逻辑一致）
-        if wch == nil { wch = nch }
-        if nch == nil { nch = wch }
-        guard let w = wch, let n = nch else {
-            BtLog.log("无可用 FFE1 特征，断开")
+        func notifiable(_ c: CBCharacteristic) -> Bool {
+            c.properties.contains(.notify) || c.properties.contains(.indicates)
+        }
+
+        var w: CBCharacteristic? = chars.first { $0.uuid == Self.charUUID && writable($0) }
+        if w == nil { w = chars.first { $0.uuid == Self.char2UUID && writable($0) } }
+        if w == nil { w = chars.first { writable($0) } }
+        var n: CBCharacteristic? = chars.first { $0.uuid == Self.charUUID && notifiable($0) }
+        if n == nil { n = chars.first { notifiable($0) } }
+        // 单特征设备兜底
+        if w == nil { w = n }
+        if n == nil { n = w }
+        guard let wch = w, let nch = n else {
+            BtLog.bms("无可用 FFE1 特征，断开")
             state = .failed("该设备没有 FFE1 特征")
             central.cancelPeripheralConnection(peripheral)
             return
         }
-        writeChar = w
-        notifyChar = n
+        writeChar = wch
+        notifyChar = nch
+        forceResponseWrite = false
+        rxCount = 0
         // 按厂家建立解析器
         if vendor == .ant {
             let p = AntBmsParser()
@@ -443,20 +481,21 @@ extension BmsService: CBPeripheralDelegate {
             jk = p
             ant = nil
         }
-        BtLog.log("写特征=\(w.uuid.uuidString) 通知特征=\(n.uuid.uuidString) 订阅通知")
-        peripheral.setNotifyValue(true, for: n)
+        BtLog.bms("选用 write=\(wch.uuid.uuidString)(\(wch.properties.contains(.writeWithoutResponse) ? "无应答写" : "需应答")) "
+                  + "notify=\(nch.uuid.uuidString)(\(nch.properties.contains(.indicates) ? "指示" : "通知"))")
+        peripheral.setNotifyValue(true, for: nch)
     }
 
     func peripheral(_ peripheral: CBPeripheral,
                     didUpdateNotificationStateFor characteristic: CBCharacteristic,
                     error: Error?) {
         if let error {
-            BtLog.log("订阅通知失败 \(error.localizedDescription)")
+            BtLog.bms("订阅通知失败 \(error.localizedDescription)")
             state = .failed("订阅通知失败：\(error.localizedDescription)")
             return
         }
         if characteristic.isNotifying {
-            BtLog.log("订阅成功 \(characteristic.uuid.uuidString)")
+            BtLog.bms("订阅成功 \(characteristic.uuid.uuidString)")
             sendReadyCommands()
         }
     }
@@ -465,15 +504,19 @@ extension BmsService: CBPeripheralDelegate {
                     didUpdateValueFor characteristic: CBCharacteristic,
                     error: Error?) {
         if let error {
-            BtLog.log("读值错误 \(characteristic.uuid.uuidString) \(error.localizedDescription)")
+            BtLog.bms("读值错误 \(characteristic.uuid.uuidString) \(error.localizedDescription)")
             return
         }
         guard let data = characteristic.value, !data.isEmpty else { return }
         let bytes = [UInt8](data)
-        BtLog.log("RX ←\(characteristic.uuid.uuidString) \(BtLog.hex(bytes))")
+        rxCount += 1
+        // 只记前 3 条原始通知：能立刻区分「根本没收到」和「收到但格式变了」
+        if rxCount <= 3 {
+            BtLog.bms("RX ←\(characteristic.uuid.uuidString) len=\(bytes.count) \(BtLog.hex(bytes, maxCount: 24))")
+        }
         let s = jk?.feed(bytes) ?? ant?.feed(bytes)
-        if s == nil {
-            BtLog.log("RX 未能解析出快照（缓冲 \(jk?.bufferedCount ?? ant?.bufferedCount ?? 0) 字节）")
+        if s == nil && rxCount <= 3 {
+            BtLog.bms("RX 未能解析出快照（缓冲 \(jk?.bufferedCount ?? ant?.bufferedCount ?? 0) 字节）")
         }
         ingest(s)
     }
@@ -481,6 +524,15 @@ extension BmsService: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
         guard error == nil else { return }
         lastRSSI = RSSI.intValue
+    }
+
+    func peripheral(_ peripheral: CBPeripheral,
+                    didWriteValueFor characteristic: CBCharacteristic,
+                    error: Error?) {
+        if let error {
+            txFail += 1
+            BtLog.bms("写命令失败 \(characteristic.uuid.uuidString) \(error.localizedDescription)")
+        }
     }
 }
 

@@ -10,11 +10,13 @@ struct RootView: View {
     @EnvironmentObject var navi: NavigationController
     @EnvironmentObject var favorites: FavoriteStore
     @EnvironmentObject var cloud: CloudSync
+    @EnvironmentObject var ctrl: ZhikeService
 
     @State private var tab: TabKind = .dashboard
     @State private var showConnect = false
     @State private var showSettings = false
     @State private var showUpdate = false
+    @State private var showCtrlScan = false
 
     var body: some View {
         ZStack {
@@ -36,6 +38,17 @@ struct RootView: View {
                 updater.check(manifestURL: settings.updateManifestURL,
                               currentBuild: UpdateChecker.currentBuild)
             }
+            // 控制器链路：错开 BMS 的连接高峰，稍晚一点用上次的 identifier 直连
+            if settings.controllerVendor == .zhike {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { ctrl.autoConnectIfSaved() }
+            }
+        }
+        .onChange(of: settings.controllerVendor) { v in
+            if v == .zhike {
+                ctrl.autoConnectIfSaved()
+            } else {
+                ctrl.disconnect()
+            }
         }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .onChange(of: settings.visibleTabs) { tabs in
@@ -48,6 +61,11 @@ struct RootView: View {
             ConnectSheet()
                 .environmentObject(settings)
                 .environmentObject(service)
+        }
+        .fullScreenCover(isPresented: $showCtrlScan) {
+            ControllerScanView()
+                .environmentObject(settings)
+                .environmentObject(ctrl)
         }
         .sheet(isPresented: $showSettings) {
             SettingsPage()
@@ -105,18 +123,22 @@ struct RootView: View {
 
             Spacer(minLength: 4)
 
-            // 控制器连接状态胶囊：远驱已接入（连接逻辑开发中，当前恒为未连接），
-            // 其余厂家未接入。点击进设置改厂家；SwiftUI 响应式绑定，改完自动刷新
+            // 控制器连接胶囊：智科已接入 → 点击进整屏扫描页选设备；
+            // 其余厂家未接入 → 点击去设置里改厂家
             Button {
-                showSettings = true
+                if settings.controllerVendor == .zhike {
+                    showCtrlScan = true
+                } else {
+                    showSettings = true
+                }
             } label: {
                 HStack(spacing: 5) {
                     Circle()
-                        .fill(p.textSecondary.opacity(0.55))
+                        .fill(ctrlDotColor)
                         .frame(width: 7, height: 7)
                     Text(ctrlPillText)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(p.textSecondary)
+                        .foregroundColor(ctrlPillColor)
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 9)
@@ -164,7 +186,24 @@ struct RootView: View {
 
     private var ctrlPillText: String {
         let v = settings.controllerVendor
+        if v == .zhike { return ctrl.pillText }
         return v.supported ? "控制器未连接" : "\(v.label)控制器未接入"
+    }
+
+    private var ctrlDotColor: Color {
+        let p = settings.palette
+        guard settings.controllerVendor == .zhike else { return p.textSecondary.opacity(0.55) }
+        if ctrl.pillColorIsActive { return p.ok }
+        if ctrl.pillNeedsWarn { return p.warn }
+        return p.textSecondary.opacity(0.55)
+    }
+
+    private var ctrlPillColor: Color {
+        let p = settings.palette
+        guard settings.controllerVendor == .zhike else { return p.textSecondary }
+        if ctrl.pillColorIsActive { return p.textPrimary }
+        if ctrl.pillNeedsWarn { return p.warn }
+        return p.textSecondary
     }
 
     private var statusColor: Color {

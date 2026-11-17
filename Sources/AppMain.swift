@@ -5,6 +5,7 @@ import SwiftUI
 struct SmartDashApp: App {
     @StateObject private var settings = AppSettings()
     @StateObject private var service = BmsService()
+    @StateObject private var ctrl = ZhikeService()
     @StateObject private var location = LocationService()
     @StateObject private var updater = UpdateChecker()
     @StateObject private var navi = NavigationController()
@@ -23,6 +24,7 @@ struct SmartDashApp: App {
             RootView()
                 .environmentObject(settings)
                 .environmentObject(service)
+                .environmentObject(ctrl)
                 .environmentObject(location)
                 .environmentObject(updater)
                 .environmentObject(navi)

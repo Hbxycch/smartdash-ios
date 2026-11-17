@@ -52,8 +52,8 @@ enum MapTheme: String, CaseIterable, Identifiable {
     }
 }
 
-/// 控制器厂家：远驱已接入（数据参与车速/转速/温度展示），
-/// 其余三家仅先预留选项，接入前显示「开发中」。
+/// 控制器厂家：远驱 / 智科已接入（数据参与车速/转速/温度展示），
+/// 其余两家仅先预留选项，接入前显示「开发中」。
 enum ControllerVendor: String, CaseIterable, Identifiable {
     case fardriver, zhike, lingbo, lande
     var id: String { rawValue }
@@ -65,7 +65,7 @@ enum ControllerVendor: String, CaseIterable, Identifiable {
         case .lande: return "蓝德"
         }
     }
-    var supported: Bool { self == .fardriver }
+    var supported: Bool { self == .fardriver || self == .zhike }
     var stateText: String { supported ? "已接入" : "开发中" }
 }
 
