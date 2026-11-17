@@ -450,7 +450,7 @@ extension BmsService: CBPeripheralDelegate {
             c.properties.contains(.write) || c.properties.contains(.writeWithoutResponse)
         }
         func notifiable(_ c: CBCharacteristic) -> Bool {
-            c.properties.contains(.notify) || c.properties.contains(.indicates)
+            c.properties.contains(.notify) || c.properties.contains(.indicate)
         }
 
         var w: CBCharacteristic? = chars.first { $0.uuid == Self.charUUID && writable($0) }
@@ -482,7 +482,7 @@ extension BmsService: CBPeripheralDelegate {
             ant = nil
         }
         BtLog.bms("选用 write=\(wch.uuid.uuidString)(\(wch.properties.contains(.writeWithoutResponse) ? "无应答写" : "需应答")) "
-                  + "notify=\(nch.uuid.uuidString)(\(nch.properties.contains(.indicates) ? "指示" : "通知"))")
+                  + "notify=\(nch.uuid.uuidString)(\(nch.properties.contains(.indicate) ? "指示" : "通知"))")
         peripheral.setNotifyValue(true, for: nch)
     }
 

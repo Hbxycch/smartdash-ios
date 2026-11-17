@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import CoreBluetooth
+import SwiftUI
 
 /// 扫描列表里的一行控制器设备。
 /// iOS 不暴露 MAC，用 identifier 前 8 位代替（同一台车机内保持稳定，足够辨认）。
@@ -192,10 +193,10 @@ final class ZhikeService: NSObject, ObservableObject {
               let uuid = UUID(uuidString: s) else { return }
         guard central.state == .poweredOn else { return }
         guard let p = central.retrievePeripherals(withIdentifiers: [uuid]).first else {
-            BtLog.ctrl("上次的控制器 \(s.prefix(8)) 不在系统缓存中，需要重新扫描")
+            BtLog.ctrl("上次的控制器 \(String(s.prefix(8))) 不在系统缓存中，需要重新扫描")
             return
         }
-        BtLog.ctrl("按上次的 identifier 直接重连 \(p.name ?? s.prefix(8))")
+        BtLog.ctrl("按上次的 identifier 直接重连 \(p.name ?? String(s.prefix(8)))")
         manualDisconnect = false
         attach(p)
     }
@@ -379,7 +380,7 @@ extension ZhikeService: CBCentralManagerDelegate {
         let advName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
         let name = advName ?? peripheral.name ?? ""
         let display = name.isEmpty ? "未命名设备" : name
-        let zhike = isZhikeName(name)
+        let zhike = Self.isZhikeName(name)
         found[peripheral.identifier] = peripheral
         let dev = CtrlDevice(id: peripheral.identifier, name: display, rssi: rssi, isZhike: zhike)
         if let idx = devices.firstIndex(where: { $0.id == dev.id }) {
@@ -479,7 +480,7 @@ extension ZhikeService: CBPeripheralDelegate {
             if c.properties.contains(.write) { props.append("写") }
             if c.properties.contains(.writeWithoutResponse) { props.append("无应答写") }
             if c.properties.contains(.notify) { props.append("通知") }
-            if c.properties.contains(.indicates) { props.append("指示") }
+            if c.properties.contains(.indicate) { props.append("指示") }
             BtLog.ctrl("  特征 \(c.uuid.uuidString) [\(props.joined(separator: " "))]")
         }
         requestNextService(peripheral)
@@ -490,7 +491,7 @@ extension ZhikeService: CBPeripheralDelegate {
             c.properties.contains(.write) || c.properties.contains(.writeWithoutResponse)
         }
         func notifiable(_ c: CBCharacteristic) -> Bool {
-            c.properties.contains(.notify) || c.properties.contains(.indicates)
+            c.properties.contains(.notify) || c.properties.contains(.indicate)
         }
 
         let w1 = allChars.first { $0.uuid == Self.ffe1 && writable($0) }
