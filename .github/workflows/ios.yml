@@ -80,7 +80,18 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            build 2>&1 | tee build.log
+
+      # 编译失败时把错误逐条打成 annotation，提交检查页能直接看到是哪一行
+      - name: 提取编译错误
+        if: failure()
+        run: |
+          echo "── 编译错误摘要 ──"
+          grep -E "error:" build.log | head -10 | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
+          echo "── 错误上下文 ──"
+          grep -n -A8 "error:" build.log | head -160 || true
 
       - name: 注入高德 Key
         env:
