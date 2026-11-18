@@ -13,6 +13,8 @@ target 'SmartDash' do
   pod 'AMapSearch'
   # 定位（导航过程需要持续高精度定位）
   pod 'AMapLocation'
+  # 车队语音对讲（WebRTC SFU；静态库方式集成，与高德共存）
+  pod 'LiveKit', '~> 2.0'
 end
 
 post_install do |installer|

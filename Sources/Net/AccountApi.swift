@@ -83,6 +83,69 @@ enum AccountApi {
         return try await call(base + "/api/v1/user/device/claim", method: "POST", body: body, token: token)
     }
 
+    // MARK: - 车队（与 Android AccountApi.fleet* 同口径）
+
+    /// 创建车队：POST /api/v1/user/fleet，body name
+    static func fleetCreate(base: String, token: String, name: String) async throws -> [String: Any] {
+        try await call(base + "/api/v1/user/fleet", method: "POST",
+                       body: ["name": name], token: token)
+    }
+
+    /// 加入车队：body roomCode（6 位大写）
+    static func fleetJoin(base: String, token: String, roomCode: String) async throws -> [String: Any] {
+        try await call(base + "/api/v1/user/fleet/join", method: "POST",
+                       body: ["roomCode": roomCode.uppercased()], token: token)
+    }
+
+    /// 退出车队
+    static func fleetLeave(base: String, token: String) async throws -> [String: Any] {
+        try await call(base + "/api/v1/user/fleet/leave", method: "POST", body: [:], token: token)
+    }
+
+    /// 踢出成员（队长）
+    static func fleetKick(base: String, token: String, userId: Int) async throws -> [String: Any] {
+        try await call(base + "/api/v1/user/fleet/kick", method: "POST",
+                       body: ["userId": userId], token: token)
+    }
+
+    /// 队长结束车队（全员解散）
+    static func fleetEnd(base: String, token: String) async throws -> [String: Any] {
+        try await call(base + "/api/v1/user/fleet/end", method: "POST", body: [:], token: token)
+    }
+
+    /// 我的当前车队：{fleet: null | {…, wsUrl, voiceRoom}}
+    static func fleetMine(base: String, token: String) async throws -> [String: Any] {
+        try await call(base + "/api/v1/user/fleet/mine", method: "GET", body: nil, token: token)
+    }
+
+    /// 聊天历史：{items:[{sender,text,createdAt,…}]}，进入房间拉一次，同时推已读水位线
+    static func fleetChat(base: String, token: String, limit: Int = 100) async throws -> [[String: Any]] {
+        let r = try await call("\(base)/api/v1/user/fleet/chat?limit=\(limit)", method: "GET",
+                               body: nil, token: token)
+        return r["items"] as? [[String: Any]] ?? []
+    }
+
+    /// 行程开始（队长）
+    static func fleetTripStart(base: String, token: String) async throws -> [String: Any] {
+        try await call(base + "/api/v1/user/fleet/trip/start", method: "POST", body: [:], token: token)
+    }
+
+    /// 行程结束（队长）：返回 distanceM / durationS
+    static func fleetTripEnd(base: String, token: String) async throws -> [String: Any] {
+        try await call(base + "/api/v1/user/fleet/trip/end", method: "POST", body: [:], token: token)
+    }
+
+    /// 行程轨迹回放：{trip, tracks:[{userId,username,points:[…]}]}
+    static func fleetTripTracks(base: String, token: String, tripId: Int) async throws -> [String: Any] {
+        try await call("\(base)/api/v1/user/fleet/trip/\(tripId)?maxPoints=600", method: "GET",
+                       body: nil, token: token)
+    }
+
+    /// LiveKit 语音凭证：{url, token, room}
+    static func fleetVoiceToken(base: String, token: String) async throws -> [String: Any] {
+        try await call(base + "/api/v1/user/fleet/voice-token", method: "GET", body: nil, token: token)
+    }
+
     // MARK: - 传输
 
     private static let session: URLSession = {

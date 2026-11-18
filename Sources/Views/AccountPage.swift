@@ -86,6 +86,11 @@ struct AccountPage: View {
                     .foregroundColor(authExpired ? .orange : .secondary)
                     .monospacedDigit()
             }
+            NavigationLink {
+                FleetPage()
+            } label: {
+                Label("车队", systemImage: "person.3.fill")
+            }
             Button(role: .destructive) {
                 showLogoutConfirm = true
             } label: {
