@@ -44,11 +44,14 @@ jobs:
           xcodegen --version
 
       - name: 生成 Xcode 工程
-        run: xcodegen generate
+        run: |
+          set -o pipefail
+          xcodegen generate 2>&1 | tee gen.log
 
       # 高德 SDK 只能走 CocoaPods，必须在 xcodegen 之后执行（它要 .xcodeproj 才能挂 target）
       - name: 安装高德 SDK（CocoaPods）
         run: |
+          set -o pipefail
           if ! command -v pod >/dev/null 2>&1; then
             sudo gem install cocoapods --no-document
           fi
@@ -56,7 +59,7 @@ jobs:
           # 高德 SDK 走 a.amap.com 直链下载，偶发抽风：失败自动重试 3 次
           ok=0
           for i in 1 2 3; do
-            if pod install; then ok=1; break; fi
+            if pod install 2>&1 | tee pod.log; then ok=1; break; fi
             echo "::warning::pod install 第 $i 次失败，30s 后清缓存重试"
             rm -rf Pods Podfile.lock
             sleep 30
@@ -86,12 +89,15 @@ jobs:
       - name: 提取编译错误
         if: failure()
         run: |
-          echo "── 编译错误摘要 ──"
-          grep -E "error:" build.log | head -10 | while IFS= read -r line; do
-            echo "::error::${line}"
+          for f in gen.log pod.log build.log; do
+            if [ -f "$f" ]; then
+              echo "── $f 最后 30 行 ──"
+              tail -30 "$f"
+              grep -E "error:|Error:|❌|✖|Encountered an unknown error|No such module|Unable to" "$f" | head -8 | while IFS= read -r line; do
+                echo "::error::${line}"
+              done
+            fi
           done
-          echo "── 错误上下文 ──"
-          grep -n -A8 "error:" build.log | head -160 || true
 
       - name: 注入高德 Key
         env:
