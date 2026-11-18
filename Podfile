@@ -13,8 +13,8 @@ target 'SmartDash' do
   pod 'AMapSearch'
   # 定位（导航过程需要持续高精度定位）
   pod 'AMapLocation'
-  # 车队语音对讲（WebRTC SFU；静态库方式集成，与高德共存）
-  pod 'LiveKit', '~> 2.0'
+  # 注意：车队语音（LiveKit）不走 CocoaPods —— trunk 上的 LiveKit 是 2020 年的同名无关旧包，
+  # 官方 LiveKit Swift SDK 只支持 SPM，见 project.yml 的 packages 段。
 end
 
 post_install do |installer|

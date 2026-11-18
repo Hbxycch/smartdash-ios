@@ -4,6 +4,12 @@
 # 工程名 SmartDash（仪表台）；应用对外显示名是「智能仪表」，见 CFBundleDisplayName。
 name: SmartDash
 
+# ── SPM 依赖（与 CocoaPods 混用：Podfile 管高德，这里管车队语音 LiveKit）──
+packages:
+  LiveKit:
+    url: https://github.com/livekit/swift-sdk.git
+    from: 2.0.0
+
 options:
   bundleIdPrefix: com.smartdash
   deploymentTarget:
@@ -36,6 +42,8 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: Sources
+    dependencies:
+      - package: LiveKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.smartdash.monitor.ios
