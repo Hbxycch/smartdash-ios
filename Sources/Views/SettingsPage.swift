@@ -186,12 +186,35 @@ struct SettingsPage: View {
 
     private var controllerSection: some View {
         Section {
-            Picker("控制器厂家", selection: $settings.controllerVendor) {
+            // 自绘分段：未接入的厂家置灰不可点，并标注「未开放」
+            HStack(spacing: 3) {
                 ForEach(ControllerVendor.allCases) { v in
-                    Text(v.supported ? v.label : "\(v.label) · \(v.stateText)").tag(v)
+                    let sel = settings.controllerVendor == v
+                    Button {
+                        guard v.supported else { return }
+                        settings.controllerVendor = v
+                    } label: {
+                        VStack(spacing: 1) {
+                            Text(v.label)
+                                .font(.system(size: 12, weight: sel ? .semibold : .regular))
+                            if !v.supported {
+                                Text("未开放")
+                                    .font(.system(size: 8, weight: .medium))
+                                    .foregroundColor(settings.palette.textSecondary.opacity(0.8))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(sel ? settings.palette.accent.opacity(0.16) : Color.clear)
+                        .cornerRadius(7)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!v.supported)
+                    .opacity(v.supported ? 1 : 0.45)
                 }
             }
-            .pickerStyle(.segmented)
+            .padding(3)
+            .background(RoundedRectangle(cornerRadius: 10).fill(settings.palette.track))
 
             Text(controllerHint)
                 .font(.system(size: 11))
@@ -199,20 +222,20 @@ struct SettingsPage: View {
         } header: {
             Text("控制器")
         } footer: {
-            Text("智科已接入：顶栏胶囊点开即可扫描控制器，选择设备后自动连接；仪表样式 2 右列显示控制器温度、电机转速、母线电流/电压、相线电流与故障码。凌博 / 蓝德仍在适配中。")
+            Text("智科已接入：顶栏胶囊点开即可扫描控制器，选择设备后自动连接；仪表样式 2 右列显示控制器温度、电机转速、母线电流/电压、相线电流与故障码。其余厂家未开放。")
         }
     }
 
     private var controllerHint: String {
         switch settings.controllerVendor {
         case .fardriver:
-            return "远驱已接入：控制器数据参与车速、转速与温度展示。"
+            return "远驱未开放：iOS 端当前只支持智科控制器。"
         case .zhike:
             return "智科已接入：顶栏控制器胶囊 → 扫描并选择 GEKOO 设备；连上后右列显示温度/转速/母线/相电流/故障码。"
         case .lingbo:
-            return "凌博协议开发中：接入前控制器数据不参与展示，先选远驱或智科。"
+            return "凌博未开放：iOS 端当前只支持智科控制器。"
         case .lande:
-            return "蓝德协议开发中：接入前控制器数据不参与展示，先选远驱或智科。"
+            return "蓝德未开放：iOS 端当前只支持智科控制器。"
         }
     }
 
@@ -241,7 +264,7 @@ struct SettingsPage: View {
         } footer: {
             Text("注册自动获得 7 天免费试用；激活码与用户绑定、数据与设备绑定，一个账号可添加多辆车。")
         }
-        .sheet(isPresented: $showAccount) {
+        .fullScreenCover(isPresented: $showAccount) {
             AccountPage()
                 .environmentObject(settings)
                 .environmentObject(cloud)

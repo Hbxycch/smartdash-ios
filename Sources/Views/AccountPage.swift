@@ -10,7 +10,8 @@ struct AccountPage: View {
     @EnvironmentObject var cloud: CloudSync
     @Environment(\.dismiss) private var dismiss
 
-    @State private var registerMode = true
+    // 默认进登录（多数用户已有账号）；注册切到第二个位置
+    @State private var registerMode = false
     @State private var username = ""
     @State private var password = ""
     @State private var password2 = ""
@@ -78,6 +79,13 @@ struct AccountPage: View {
                     .foregroundColor(.secondary)
                     .font(settings.boundVehicle.isEmpty ? .callout : .body)
             }
+            HStack {
+                Text("授权到期")
+                Spacer()
+                Text(authExpiryText)
+                    .foregroundColor(authExpired ? .orange : .secondary)
+                    .monospacedDigit()
+            }
             Button(role: .destructive) {
                 showLogoutConfirm = true
             } label: {
@@ -93,8 +101,8 @@ struct AccountPage: View {
     private var modeSection: some View {
         Section {
             Picker("", selection: $registerMode) {
-                Text("注册").tag(true)
                 Text("登录").tag(false)
+                Text("注册").tag(true)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -159,6 +167,26 @@ struct AccountPage: View {
         }
     }
 
+    // MARK: - 授权到期
+
+    /// ISO 串 → 「2026-12-18 到期」；空 = 未激活过
+    private var authExpiryText: String {
+        guard !settings.deviceAuthExpires.isEmpty,
+              let t = ISO8601DateFormatter().date(from: settings.deviceAuthExpires)
+        else { return settings.deviceAuthExpires.isEmpty ? "未激活" : settings.deviceAuthExpires }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        if Calendar.current.startOfDay(for: t) < Calendar.current.startOfDay(for: Date()) {
+            return "\(f.string(from: t)) 已到期"
+        }
+        let days = Calendar.current.dateComponents([.day],
+                from: Calendar.current.startOfDay(for: Date()),
+                to: Calendar.current.startOfDay(for: t)).day ?? 0
+        return "\(f.string(from: t)) 到期 · 剩 \(max(0, days)) 天"
+    }
+
+    private var authExpired: Bool { authExpiryText.contains("已到期") }
+
     // MARK: - 校验
 
     private var canSubmit: Bool {
@@ -216,12 +244,14 @@ struct AccountPage: View {
                         settings.userTrialDays = trial
                     }
                     var boundName = ""
+                    var authExpires = ""
                     if let dev = me["device"] as? [String: Any], dev["bound"] as? Bool == true,
-                       let v = dev["vehicle"] as? [String: Any],
-                       let model = v["model"] as? String {
-                        boundName = model
+                       let v = dev["vehicle"] as? [String: Any] {
+                        boundName = v["model"] as? String ?? ""
+                        authExpires = v["authExpiresAt"] as? String ?? ""
                     }
                     settings.boundVehicle = boundName
+                    if !authExpires.isEmpty { settings.deviceAuthExpires = authExpires }
                 }
             } catch {
                 // 网络失败就沿用本地缓存
@@ -317,9 +347,11 @@ struct AccountPage: View {
         var boundName = ""
         if let dev = r["device"] as? [String: Any] {
             if dev["bound"] as? Bool == true,
-               let v = dev["vehicle"] as? [String: Any],
-               let model = v["model"] as? String {
-                boundName = model
+               let v = dev["vehicle"] as? [String: Any] {
+                boundName = v["model"] as? String ?? ""
+                if let auth = v["authExpiresAt"] as? String, !auth.isEmpty {
+                    settings.deviceAuthExpires = auth
+                }
             }
         }
         settings.boundVehicle = boundName

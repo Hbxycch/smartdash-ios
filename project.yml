@@ -40,8 +40,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.smartdash.monitor.ios
         PRODUCT_NAME: SmartDash
-        MARKETING_VERSION: "4.18"
-        CURRENT_PROJECT_VERSION: "58"
+        MARKETING_VERSION: "4.19"
+        CURRENT_PROJECT_VERSION: "59"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         SUPPORTS_MACCATALYST: NO

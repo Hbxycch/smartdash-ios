@@ -65,8 +65,9 @@ enum ControllerVendor: String, CaseIterable, Identifiable {
         case .lande: return "蓝德"
         }
     }
-    var supported: Bool { self == .fardriver || self == .zhike }
-    var stateText: String { supported ? "已接入" : "开发中" }
+    // iOS 端当前只接了智科；其余厂家按钮置灰显示「未开放」
+    var supported: Bool { self == .zhike }
+    var stateText: String { supported ? "已接入" : "未开放" }
 }
 
 /// 全部偏好设置：UserDefaults 持久化，改动立刻写盘。
@@ -113,6 +114,8 @@ final class AppSettings: ObservableObject {
     @Published var userTrialDays: Int { didSet { d.set(userTrialDays, forKey: "user_trial_days") } }
     /// 本机绑定车辆名（登录接口返回的 vehicle.model），空 = 未绑定
     @Published var boundVehicle: String { didSet { d.set(boundVehicle, forKey: "bound_vehicle") } }
+    /// 本机授权到期（激活码有效期落库，/me 返回 vehicle.authExpiresAt 的 ISO 串），空 = 未激活
+    @Published var deviceAuthExpires: String { didSet { d.set(deviceAuthExpires, forKey: "device_auth_expires") } }
     /// 车型（注册时填写，回传 model 字段用），空 = 用默认值
     @Published var deviceModelHint: String { didSet { d.set(deviceModelHint, forKey: "device_model_hint") } }
 
@@ -148,6 +151,7 @@ final class AppSettings: ObservableObject {
         userName = ud.string(forKey: "user_name") ?? ""
         userTrialDays = ud.object(forKey: "user_trial_days") as? Int ?? 0
         boundVehicle = ud.string(forKey: "bound_vehicle") ?? ""
+        deviceAuthExpires = ud.string(forKey: "device_auth_expires") ?? ""
         deviceModelHint = ud.string(forKey: "device_model_hint") ?? ""
         locationEnabled = ud.object(forKey: "gps_enabled") as? Bool ?? true
         autoCheckUpdate = ud.object(forKey: "auto_update") as? Bool ?? true

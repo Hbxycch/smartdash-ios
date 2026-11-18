@@ -21,8 +21,10 @@ final class UpdateChecker: ObservableObject {
     @Published var latest: UpdateInfo?
     @Published var errorText: String?
 
-    /// 清单格式与 Android 的 version.json 兼容：
-    /// { versionCode, versionName, apkUrl|ipaUrl|url, changelog, force }
+    /// 清单格式：与 Android 共用一个 version.json，但顶层 versionCode 是 Android 的，
+    /// iOS 只认清单里的 "ios" 子对象：
+    /// { versionCode: 60, ..., "ios": { versionCode, versionName, ipaUrl, changelog, force } }
+    /// 没有 "ios" 段（老清单）时按「已是最新」处理，避免拿 Android 版本号误报升级。
     func check(manifestURL: String, currentBuild: Int) {
         let trimmed = manifestURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed), !trimmed.isEmpty else {
@@ -45,11 +47,16 @@ final class UpdateChecker: ObservableObject {
                     self.errorText = "清单解析失败（需要 JSON）"
                     return
                 }
-                let code = (obj["versionCode"] as? Int) ?? Int(obj["versionCode"] as? String ?? "") ?? 0
-                let name = obj["versionName"] as? String ?? "?"
-                let raw = (obj["ipaUrl"] as? String) ?? (obj["apkUrl"] as? String) ?? (obj["url"] as? String) ?? ""
-                let log = obj["changelog"] as? String ?? ""
-                let force = obj["force"] as? Bool ?? false
+                let src = (obj["ios"] as? [String: Any]) ?? [:]
+                guard !src.isEmpty else {
+                    self.errorText = "已是最新版本"
+                    return
+                }
+                let code = (src["versionCode"] as? Int) ?? Int(src["versionCode"] as? String ?? "") ?? 0
+                let name = src["versionName"] as? String ?? "?"
+                let raw = (src["ipaUrl"] as? String) ?? (src["url"] as? String) ?? ""
+                let log = src["changelog"] as? String ?? ""
+                let force = src["force"] as? Bool ?? false
 
                 guard code > currentBuild else {
                     self.errorText = "已是最新版本（\(name)）"
