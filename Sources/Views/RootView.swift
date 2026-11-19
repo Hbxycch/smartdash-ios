@@ -17,6 +17,7 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var showUpdate = false
     @State private var showCtrlScan = false
+    @State private var showMessages = false
 
     var body: some View {
         ZStack {
@@ -43,6 +44,11 @@ struct RootView: View {
             if settings.controllerVendor == .zhike {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { ctrl.autoConnectIfSaved() }
             }
+            // 消息角标：进场先刷一次，之后 60s 轮询（反馈未读回复 + 公告未读）
+            Task { await refreshMessagesBadge(settings: settings, cloud: cloud) }
+        }
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+            Task { await refreshMessagesBadge(settings: settings, cloud: cloud) }
         }
         .onChange(of: settings.controllerVendor) { v in
             if v == .zhike {
@@ -75,7 +81,13 @@ struct RootView: View {
                 .environmentObject(location)
                 .environmentObject(updater)
                 .environmentObject(cloud)
-        }        .alert("发现新版本", isPresented: Binding(
+        }
+        .sheet(isPresented: $showMessages) {
+            MessageCenterPage()
+                .environmentObject(settings)
+                .environmentObject(cloud)
+        }
+        .alert("发现新版本", isPresented: Binding(
             get: { updater.latest != nil },
             set: { if !$0 { updater.dismiss() } }
         )) {
@@ -165,6 +177,30 @@ struct RootView: View {
                 .padding(.vertical, 5)
                 .background(Capsule().fill(p.panel.opacity(0.9)))
                 .overlay(Capsule().stroke(p.stroke, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+
+            // 消息铃铛：反馈未读回复 + 公告未读（后台公告管理 / 反馈回复推送）
+            Button {
+                showMessages = true
+            } label: {
+                Image(systemName: settings.messagesUnread > 0 ? "bell.badge" : "bell")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(p.textPrimary)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(p.panel.opacity(0.9)))
+                    .overlay(Circle().stroke(p.stroke, lineWidth: 1))
+                    .overlay(alignment: .topTrailing) {
+                        if settings.messagesUnread > 0 {
+                            Text(settings.messagesUnread > 99 ? "99+" : "\(settings.messagesUnread)")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(p.danger))
+                                .offset(x: 5, y: -4)
+                        }
+                    }
             }
             .buttonStyle(.plain)
 

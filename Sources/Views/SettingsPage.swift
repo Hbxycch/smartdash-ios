@@ -31,6 +31,7 @@ struct SettingsPage: View {
                 mapSection
                 locationSection
                 accountSection
+                feedbackSection
                 navSection
                 logSection
                 cloudSection
@@ -311,20 +312,75 @@ struct SettingsPage: View {
 
     private var gaugeSection: some View {
         Section("仪表控制") {
-            // 与 Android 同款四选项分段：默认 / 经典 / 特斯拉 / CarPlay（后两项未开放，置灰）
+            // 与 Android 同款四选项分段：默认 / 经典 / 特斯拉 / CarPlay（后者未开放，置灰）
             HStack(spacing: 4) {
                 gaugeSeg(1, "默认")
                 gaugeSeg(2, "经典")
-                gaugeSeg(3, "特斯拉", locked: true)
+                gaugeSeg(3, "特斯拉")
                 gaugeSeg(4, "CarPlay", locked: true)
             }
             .padding(4)
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(Color.secondary.opacity(0.12)))
-            Text("仪表首页的版式。默认：码表 + 地图；经典：三栏仪表（电量/电压/电流/温度 + 弧形码表）。特斯拉 / CarPlay 风格未开放。")
+            Text("仪表首页的版式。默认：码表 + 地图；经典：三栏仪表（电量/电压/电流/温度 + 弧形码表）；特斯拉：卡片风（速度大卡 + 电池/控制器双卡）。CarPlay 风格未开放。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: - 帮助与反馈
+
+    @State private var showFeedback = false
+    @State private var showMessageCenter = false
+
+    private var feedbackSection: some View {
+        Section {
+            Button {
+                showMessageCenter = true
+            } label: {
+                HStack {
+                    Label("消息中心", systemImage: "bell")
+                    Spacer()
+                    if settings.messagesUnread > 0 {
+                        Text("\(settings.messagesUnread)")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(settings.palette.danger))
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
+            }
+            Button {
+                showFeedback = true
+            } label: {
+                HStack {
+                    Label("问题反馈", systemImage: "square.and.pencil")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
+            }
+            Text("公告与研发回复都会推送到消息中心；反馈支持附带截图。")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        } header: {
+            Text("帮助与反馈")
+        }
+        .sheet(isPresented: $showMessageCenter) {
+            MessageCenterPage()
+                .environmentObject(settings)
+                .environmentObject(cloud)
+        }
+        .sheet(isPresented: $showFeedback) {
+            FeedbackPage()
+                .environmentObject(settings)
+                .environmentObject(cloud)
         }
     }
 

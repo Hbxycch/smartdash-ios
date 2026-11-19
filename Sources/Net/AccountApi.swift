@@ -90,6 +90,58 @@ enum AccountApi {
         return try await call(base + "/api/v1/user/device/claim", method: "POST", body: body, token: token)
     }
 
+    // MARK: - 问题反馈（与 Android AccountApi.feedback* 同口径）
+
+    /// 提交反馈。images：≤3 张压缩后的 JPEG base64（不带 data: 前缀）。
+    static func feedbackCreate(base: String, token: String, category: String,
+                               content: String, deviceNo: String, appVersion: String,
+                               bmsVendor: String, ctrlVendor: String,
+                               authState: String,
+                               images: [[String: Any]]? = nil) async throws -> [String: Any] {
+        var body: [String: Any] = ["category": category, "content": content]
+        if !deviceNo.isEmpty { body["deviceNo"] = deviceNo }
+        if !appVersion.isEmpty { body["appVersion"] = appVersion }
+        if !bmsVendor.isEmpty { body["bmsVendor"] = bmsVendor }
+        if !ctrlVendor.isEmpty { body["ctrlVendor"] = ctrlVendor }
+        if !authState.isEmpty { body["authState"] = authState }
+        if let images, !images.isEmpty { body["images"] = images }
+        return try await call(base + "/api/v1/user/feedback", method: "POST", body: body, token: token)
+    }
+
+    /// 我的反馈列表（拉取即视为回复已读，服务端顺带清零未读数）
+    static func feedbackMine(base: String, token: String, limit: Int = 50) async throws -> [[String: Any]] {
+        let r = try await call("\(base)/api/v1/user/feedback/mine?limit=\(limit)", method: "GET",
+                               body: nil, token: token)
+        return r["items"] as? [[String: Any]] ?? []
+    }
+
+    /// 未读回复数（只读不改）
+    static func feedbackUnread(base: String, token: String) async throws -> Int {
+        let r = try await call(base + "/api/v1/user/feedback/unread", method: "GET",
+                               body: nil, token: token)
+        return r["unread"] as? Int ?? 0
+    }
+
+    // MARK: - 消息中心（公告 + 反馈回复，与 Android messages* 同口径）
+
+    /// 未读汇总：{feedback, announcements, total}，顶栏消息角标用
+    static func messagesUnread(base: String, token: String) async throws -> [String: Any] {
+        try await call(base + "/api/v1/user/messages/unread", method: "GET", body: nil, token: token)
+    }
+
+    /// 公告列表（items：id/title/body/createdAt/isNew）
+    static func announcements(base: String, token: String, limit: Int = 50) async throws -> [[String: Any]] {
+        let r = try await call("\(base)/api/v1/user/announcements?limit=\(limit)", method: "GET",
+                               body: nil, token: token)
+        return r["items"] as? [[String: Any]] ?? []
+    }
+
+    /// 公告已读：把当前用户的已读水位线推到 now()，角标公告部分清零
+    static func announcementsRead(base: String, token: String) async throws {
+        _ = try await call(base + "/api/v1/user/announcements/read", method: "POST",
+                           body: [:], token: token)
+    }
+
     // MARK: - 车队（与 Android AccountApi.fleet* 同口径）
 
     /// 创建车队：POST /api/v1/user/fleet，body name

@@ -17,6 +17,9 @@ struct DashboardPage: View {
             // 仪表样式 2：三栏仪表（左列读数 / 中间弧形码表 / 右列控制器温度），无地图区
             if settings.gaugeStyle == 2 {
                 GaugeStyle2Page()
+            } else if settings.gaugeStyle == 3 {
+                // 仪表样式 3：特斯拉卡片风（速度大卡 + 电池/控制器双卡 + 底部状态条），无地图区
+                GaugeStyle3Page()
             } else {
                 let wide = geo.size.width > geo.size.height * 1.15
                 let readout = BmsReadout(snapshot: service.snapshot, settings: settings)

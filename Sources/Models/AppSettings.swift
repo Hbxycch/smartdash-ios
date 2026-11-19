@@ -102,7 +102,7 @@ final class AppSettings: ObservableObject {
     @Published var mapTheme: MapTheme { didSet { d.set(mapTheme.rawValue, forKey: "map_theme") } }
     @Published var headingUp: Bool { didSet { d.set(headingUp, forKey: "map_heading_up") } }
 
-    // ── 仪表控制：样式 1（经典）已实现，样式 2/3 预留 ──
+    // ── 仪表控制：样式 1（默认·地图+横排）/ 2（经典·三栏）/ 3（特斯拉·卡片）已实现，4（CarPlay）预留 ──
     @Published var gaugeStyle: Int { didSet { d.set(gaugeStyle, forKey: "gauge_style") } }
 
     // ── 控制器厂家 ──
@@ -126,6 +126,10 @@ final class AppSettings: ObservableObject {
     // ── 车队 ──
     /// 语音模式：false=按住说话（PTT），true=自由麦（点击开/关麦）
     @Published var voiceFreeMic: Bool { didSet { d.set(voiceFreeMic, forKey: "voice_free_mic") } }
+
+    // ── 消息中心 ──
+    /// 顶栏消息角标：反馈未读回复 + 公告未读（60s 轮询 /messages/unread 汇总）
+    @Published var messagesUnread: Int { didSet { d.set(messagesUnread, forKey: "messages_unread") } }
 
     // ── 定位 ──
     @Published var locationEnabled: Bool { didSet { d.set(locationEnabled, forKey: "gps_enabled") } }
@@ -167,6 +171,7 @@ final class AppSettings: ObservableObject {
         deviceAuthExpires = ud.string(forKey: "device_auth_expires") ?? ""
         deviceModelHint = ud.string(forKey: "device_model_hint") ?? ""
         voiceFreeMic = ud.object(forKey: "voice_free_mic") as? Bool ?? false
+        messagesUnread = ud.object(forKey: "messages_unread") as? Int ?? 0
         locationEnabled = ud.object(forKey: "gps_enabled") as? Bool ?? true
         autoCheckUpdate = ud.object(forKey: "auto_update") as? Bool ?? true
         // 更新清单留空 = 静默走内置更新源（不再把默认地址明文预填进输入框）
