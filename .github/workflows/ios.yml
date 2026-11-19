@@ -211,3 +211,5 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           echo "IPA raw 直链: $RAW"
+
+# 触发器备注：空提交不会触发 push 构建，改动本文件可强制重跑
