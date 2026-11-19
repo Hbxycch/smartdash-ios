@@ -99,6 +99,7 @@ enum AccountApi {
                                content: String, deviceNo: String, appVersion: String,
                                bmsVendor: String, ctrlVendor: String,
                                authState: String,
+                               context: [String: Any]? = nil,
                                images: [[String: Any]]? = nil) async throws -> [String: Any] {
         var body: [String: Any] = ["category": category, "content": content]
         if !deviceNo.isEmpty { body["deviceNo"] = deviceNo }
@@ -106,6 +107,7 @@ enum AccountApi {
         if !bmsVendor.isEmpty { body["bmsVendor"] = bmsVendor }
         if !ctrlVendor.isEmpty { body["ctrlVendor"] = ctrlVendor }
         if !authState.isEmpty { body["authState"] = authState }
+        if let context { body["context"] = context }
         if let images, !images.isEmpty { body["images"] = images }
         return try await call(base + "/api/v1/user/feedback", method: "POST", body: body, token: token)
     }

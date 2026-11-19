@@ -433,6 +433,8 @@ struct FeedbackComposePage: View {
                 bmsVendor: settings.vendor.label,
                 ctrlVendor: settings.controllerVendor.label,
                 authState: authStateText,
+                context: DeviceDiag.snapshot(settings: settings, cloud: cloud,
+                                             baseURL: cloud.normalizedBaseURL),
                 images: payloads.isEmpty ? nil : payloads)
             submittedNo = r["fbNo"] as? String ?? ""
         } catch let e as AccountApi.ApiError {
