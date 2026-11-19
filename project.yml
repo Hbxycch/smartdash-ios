@@ -7,8 +7,8 @@ name: SmartDash
 # ── SPM 依赖（与 CocoaPods 混用：Podfile 管高德，这里管车队语音 LiveKit）──
 packages:
   LiveKit:
-    url: https://github.com/livekit/swift-sdk.git
-    from: 2.0.0
+    url: https://github.com/livekit/client-sdk-swift.git
+    from: 2.15.0
 
 options:
   bundleIdPrefix: com.smartdash
@@ -44,6 +44,7 @@ targets:
       - path: Sources
     dependencies:
       - package: LiveKit
+        product: LiveKitSDK
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.smartdash.monitor.ios

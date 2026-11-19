@@ -1,6 +1,6 @@
 import Foundation
 import AVFoundation
-import LiveKit
+import LiveKitSDK
 
 /// 语音对讲封装（LiveKit SFU @ NAS:7880），与 Android FleetVoice 同口径。
 ///
@@ -54,7 +54,7 @@ final class FleetVoice: ObservableObject {
         }
         Task {
             do {
-                try await r.localParticipant.set(source: .microphone, enabled: on)
+                try await r.localParticipant.setMicrophone(enabled: on)
                 await MainActor.run {
                     self.pttOn = on
                     completion(true)
