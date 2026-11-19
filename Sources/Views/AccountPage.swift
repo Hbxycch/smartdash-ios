@@ -107,7 +107,7 @@ struct AccountPage: View {
     // MARK: - 昵称（全服唯一，2~20 字）
 
     private var nicknameSection: some View {
-        Section("昵称") {
+        Section {
             TextField("昵称（2~20 字，全服唯一）", text: $nickname)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -122,6 +122,8 @@ struct AccountPage: View {
                 }
             }
             .disabled(busyNick || !canSaveNickname)
+        } header: {
+            Text("昵称")
         } footer: {
             Text("车队成员、聊天、轨迹全线显示昵称；当前：\(settings.userNickname.isEmpty ? "未设置（显示用户名）" : settings.userNickname)")
         }
