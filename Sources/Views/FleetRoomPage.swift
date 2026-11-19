@@ -8,12 +8,19 @@ import MapKit
 struct FleetMember: Identifiable, Equatable {
     let id: Int
     let username: String
+    let nickname: String
     let role: String
     let online: Bool
     var isOwner: Bool { role == "owner" }
+    /// 展示名：昵称优先（空则回退用户名），与 Android nameOf 同口径
+    var displayName: String {
+        let n = nickname.trimmingCharacters(in: .whitespaces)
+        return n.isEmpty ? username : n
+    }
 
     static func == (l: FleetMember, r: FleetMember) -> Bool {
-        l.id == r.id && l.username == r.username && l.online == r.online && l.role == r.role
+        l.id == r.id && l.username == r.username && l.nickname == r.nickname
+            && l.online == r.online && l.role == r.role
     }
 }
 
@@ -178,13 +185,14 @@ final class FleetRoomVM: ObservableObject {
     // MARK: 成员
 
     var myName: String {
-        members.first { $0.id == meId }?.username ?? ""
+        members.first { $0.id == meId }?.displayName ?? ""
     }
 
     private func applyMembers(_ items: [[String: Any]]) {
         members = items.map {
             FleetMember(id: $0["userId"] as? Int ?? 0,
                         username: $0["username"] as? String ?? "",
+                        nickname: $0["nickname"] as? String ?? "",
                         role: $0["role"] as? String ?? "member",
                         online: ($0["online"] as? Bool) == true)
         }
@@ -319,7 +327,7 @@ final class FleetRoomVM: ObservableObject {
         Task {
             do {
                 try await AccountApi.fleetKick(base: base, token: token, userId: member.id)
-                showToast("已移出 \(member.username)")
+                showToast("已移出 \(member.displayName)")
             } catch let e as AccountApi.ApiError {
                 showToast(AccountApi.ApiError.friendly(e))
             } catch {
@@ -339,6 +347,9 @@ final class FleetRoomVM: ObservableObject {
             self?.toast = ""
         }
     }
+
+    /// 语音模式切换 / 折叠面板等交互共用这个 toast
+    func toastMsg(_ text: String) { showToast(text) }
 
     /// unix 秒 → HH:mm
     static func fmtTs(_ ts: Double) -> String {
@@ -368,12 +379,18 @@ struct FleetRoomPage: View {
     @StateObject private var vm = FleetRoomVM()
     @State private var chatInput = ""
     @State private var pttPressed = false
+    @State private var micOpen = false
+    @State private var panelVisible = true
+    @State private var tripBarVisible = false
     @State private var kickTarget: FleetMember?
 
     var body: some View {
         HStack(spacing: 0) {
-            memberPanel
-                .frame(width: 262)
+            if panelVisible {
+                memberPanel
+                    .frame(width: 262)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
             roomMap
         }
         .background(settings.palette.bg)
@@ -421,6 +438,17 @@ struct FleetRoomPage: View {
                 Text("在线 \(vm.members.filter { $0.online }.count)")
                     .font(.system(size: 12))
                     .foregroundColor(settings.palette.textSecondary)
+                // 折叠成员栏：隐藏后地图全屏（地图左上角图标恢复）
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { panelVisible = false }
+                    vm.toastMsg("已隐藏成员列表（地图全屏）")
+                } label: {
+                    Image(systemName: "rectangle.righthalf.inset.filled")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(settings.palette.textSecondary)
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
             }
 
             ForEach(vm.members) { m in
@@ -452,7 +480,7 @@ struct FleetRoomPage: View {
                             .font(.system(size: 10))
                             .foregroundColor(settings.palette.warn)
                     }
-                    Text(m.username.isEmpty ? "队员" : m.username)
+                    Text(m.displayName)
                         .font(.system(size: 14, weight: isMe ? .semibold : .regular))
                         .lineLimit(1)
                     if isMe {
@@ -482,7 +510,7 @@ struct FleetRoomPage: View {
     /// 彩色圆头像 + 用户名首字（与 Android markerIcon 同色系）
     private func avatar(_ m: FleetMember) -> some View {
         let color = FleetRoomVM.memberColor(m.id)
-        let ch = String((m.username.isEmpty ? "队" : String(m.username.prefix(1))))
+        let ch = String((m.displayName.isEmpty ? "队" : String(m.displayName.prefix(1))))
         return ZStack {
             Circle().fill(color)
             Text(ch)
@@ -531,6 +559,16 @@ struct FleetRoomPage: View {
                 // 顶部状态 chips
                 VStack {
                     HStack(spacing: 8) {
+                        // 成员栏隐藏后的恢复入口（面板隐藏时才出现）
+                        if !panelVisible {
+                            Button {
+                                withAnimation(.easeOut(duration: 0.2)) { panelVisible = true }
+                                vm.toastMsg("已显示成员列表")
+                            } label: {
+                                chip(text: "成员", icon: "rectangle.lefthalf.inset.filled")
+                            }
+                            .buttonStyle(.plain)
+                        }
                         chip(text: vm.roomCode.isEmpty ? "—"
                              : (vm.members.filter { $0.online }.count > 0
                                 ? "在线 · \(vm.roomCode)" : vm.roomCode),
@@ -540,6 +578,23 @@ struct FleetRoomPage: View {
                             chip(text: vm.statusChip, icon: "exclamationmark.triangle")
                         }
                         Spacer()
+                        // 行程小图标：点按展开/收起行程条（进行中亮红）
+                        Button {
+                            withAnimation(.easeOut(duration: 0.2)) { tripBarVisible.toggle() }
+                        } label: {
+                            HStack(spacing: 5) {
+                                if vm.activeTripId != 0 {
+                                    Circle().fill(settings.palette.danger).frame(width: 8, height: 8)
+                                }
+                                Image(systemName: "figure.outdoor.cycle").font(.system(size: 10, weight: .semibold))
+                                Text("行程").font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(vm.activeTripId != 0 ? settings.palette.danger : .white.opacity(0.85))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.black.opacity(0.55)))
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(10)
                     Spacer()
@@ -560,16 +615,19 @@ struct FleetRoomPage: View {
                         chatInputBar
                         pttButton
                     }
-                    tripBar
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 10)
+                    if tripBarVisible {
+                        tripBar
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 10)
+                    }
                 }
             }
         }
     }
 
     private var voiceChipText: String {
-        if vm.voice.ready { return "语音就绪 · PTT" }
+        if vm.voice.ready { return "语音就绪" }
         if vm.statusChip.hasPrefix("语音") { return "语音异常" }
         return "语音连接中…"
     }
@@ -648,41 +706,86 @@ struct FleetRoomPage: View {
         vm.sendChat(t)
     }
 
-    // MARK: PTT 按钮
+    // MARK: PTT 按钮（上方胶囊切换 按住说话 / 自由麦）
 
     private var pttButton: some View {
-        ZStack {
-            Circle()
-                .fill(pttPressed ? settings.palette.danger.opacity(0.85) : Color.black.opacity(0.55))
-                .frame(width: 72, height: 72)
-            Image(systemName: "mic.fill")
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundColor(pttPressed ? .white : settings.palette.accent)
-        }
-        .overlay(Circle().stroke(pttPressed ? settings.palette.danger : settings.palette.accent.opacity(0.6),
-                                 lineWidth: 1.5))
-        .contentShape(Circle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !pttPressed {
-                        pttPressed = true
-                        vm.ptt(true)
-                    }
-                }
-                .onEnded { _ in
-                    pttPressed = false
+        VStack(spacing: 8) {
+            // 模式胶囊：自由麦开启时青色高亮；选择持久化（AppSettings.voiceFreeMic）
+            Button {
+                let to = !settings.voiceFreeMic
+                settings.voiceFreeMic = to
+                if !to && micOpen {          // 切回按住说话前先关麦
+                    micOpen = false
                     vm.ptt(false)
                 }
-        )
-        .overlay(alignment: .bottom) {
-            Text("按住说话")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.8))
-                .offset(y: 18)
+                vm.toastMsg(to ? "自由麦：点麦克风开/关麦" : "按住说话：按住开麦，松开关麦")
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: settings.voiceFreeMic ? "mic.badge.fill" : "mic.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(settings.voiceFreeMic ? "自由麦" : "按住说话")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(settings.voiceFreeMic ? settings.palette.accent : .white.opacity(0.85))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(Color.black.opacity(0.55)))
+            }
+            .buttonStyle(.plain)
+
+            ZStack {
+                Circle()
+                    .fill(micColor.opacity(0.85))
+                    .frame(width: 72, height: 72)
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundColor((pttPressed || micOpen) ? .white : settings.palette.accent)
+            }
+            .overlay(Circle().stroke(micColor, lineWidth: 1.5))
+            .contentShape(Circle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard !pttPressed else { return }
+                        pttPressed = true
+                        if settings.voiceFreeMic {
+                            micOpen.toggle()          // 自由麦：点一下开麦/关麦
+                            vm.ptt(micOpen)
+                        } else {
+                            micOpen = true            // PTT：按住开麦
+                            vm.ptt(true)
+                        }
+                    }
+                    .onEnded { _ in
+                        pttPressed = false
+                        if !settings.voiceFreeMic {
+                            micOpen = false           // PTT：松开关麦
+                            vm.ptt(false)
+                        }
+                    }
+            )
+            .overlay(alignment: .bottom) {
+                Text(pttHint)
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.8))
+                    .offset(y: 18)
+            }
+            .padding(.trailing, 12)
+            .padding(.bottom, 8)
         }
-        .padding(.trailing, 12)
-        .padding(.bottom, 8)
+    }
+
+    /// 麦克风状态色：PTT 按住 / 自由麦开 = 红，平时黑底
+    private var micColor: Color {
+        if settings.voiceFreeMic {
+            return micOpen ? settings.palette.ok : Color.black.opacity(0.55)
+        }
+        return pttPressed ? settings.palette.danger.opacity(0.85) : Color.black.opacity(0.55)
+    }
+
+    private var pttHint: String {
+        if settings.voiceFreeMic { return micOpen ? "自由麦 · 已开" : "自由麦 · 点击开麦" }
+        return "按住说话"
     }
 
     // MARK: 行程条
@@ -773,7 +876,7 @@ struct FleetMapView: UIViewRepresentable {
         // 我的位置（WS 回声之外，本机 GPS 直接兜底显示）
         var pos = positions
         if let me = myCoordinate, me.latitude != 0 || me.longitude != 0 {
-            let name = members.first { $0.id == meId }?.username ?? "本机"
+            let name = members.first { $0.id == meId }?.displayName ?? "本机"
             pos[meId] = MemberPos(lat: me.latitude, lng: me.longitude, spd: nil, name: name)
         }
 

@@ -111,6 +111,8 @@ final class AppSettings: ObservableObject {
     // ── 用户账号（注册/登录会话）──
     @Published var userToken: String { didSet { d.set(userToken, forKey: "user_token") } }
     @Published var userName: String { didSet { d.set(userName, forKey: "user_name") } }
+    /// 用户昵称（全服唯一，/me 与登录返回；空 = 未设置，展示时回退用户名）
+    @Published var userNickname: String { didSet { d.set(userNickname, forKey: "user_nickname") } }
     @Published var userTrialDays: Int { didSet { d.set(userTrialDays, forKey: "user_trial_days") } }
     /// 本机绑定车辆名（登录接口返回的 vehicle.model），空 = 未绑定
     @Published var boundVehicle: String { didSet { d.set(boundVehicle, forKey: "bound_vehicle") } }
@@ -120,6 +122,10 @@ final class AppSettings: ObservableObject {
     @Published var deviceModelHint: String { didSet { d.set(deviceModelHint, forKey: "device_model_hint") } }
 
     var isUserLoggedIn: Bool { !userToken.isEmpty }
+
+    // ── 车队 ──
+    /// 语音模式：false=按住说话（PTT），true=自由麦（点击开/关麦）
+    @Published var voiceFreeMic: Bool { didSet { d.set(voiceFreeMic, forKey: "voice_free_mic") } }
 
     // ── 定位 ──
     @Published var locationEnabled: Bool { didSet { d.set(locationEnabled, forKey: "gps_enabled") } }
@@ -149,10 +155,12 @@ final class AppSettings: ObservableObject {
         controllerVendor = ControllerVendor(rawValue: ud.string(forKey: "ctrl_vendor") ?? "") ?? .fardriver
         userToken = ud.string(forKey: "user_token") ?? ""
         userName = ud.string(forKey: "user_name") ?? ""
+        userNickname = ud.string(forKey: "user_nickname") ?? ""
         userTrialDays = ud.object(forKey: "user_trial_days") as? Int ?? 0
         boundVehicle = ud.string(forKey: "bound_vehicle") ?? ""
         deviceAuthExpires = ud.string(forKey: "device_auth_expires") ?? ""
         deviceModelHint = ud.string(forKey: "device_model_hint") ?? ""
+        voiceFreeMic = ud.object(forKey: "voice_free_mic") as? Bool ?? false
         locationEnabled = ud.object(forKey: "gps_enabled") as? Bool ?? true
         autoCheckUpdate = ud.object(forKey: "auto_update") as? Bool ?? true
         // 升级清单出厂预填：清空后回落默认，保证「启动时检查更新」开箱可用

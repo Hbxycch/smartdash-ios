@@ -19,6 +19,8 @@ struct AccountPage: View {
     @State private var email = ""
     @State private var vehicle = ""
     @State private var loginPwd = ""
+    @State private var nickname = ""
+    @State private var busyNick = false
 
     @State private var message = ""
     @State private var messageIsError = false
@@ -31,6 +33,7 @@ struct AccountPage: View {
             Form {
                 if settings.isUserLoggedIn {
                     sessionSection
+                    nicknameSection
                 } else {
                     modeSection
                     if registerMode { registerSection } else { loginSection }
@@ -98,6 +101,66 @@ struct AccountPage: View {
             }
         } footer: {
             Text("激活码在「设置 → 云同步」里填写并激活，激活后本机就挂在你的账号下，可在同一账号下添加多辆车。")
+        }
+    }
+
+    // MARK: - 昵称（全服唯一，2~20 字）
+
+    private var nicknameSection: some View {
+        Section("昵称") {
+            TextField("昵称（2~20 字，全服唯一）", text: $nickname)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button {
+                saveNickname()
+            } label: {
+                HStack {
+                    Spacer()
+                    if busyNick { ProgressView().padding(.trailing, 6) }
+                    Text("保存昵称").fontWeight(.semibold)
+                    Spacer()
+                }
+            }
+            .disabled(busyNick || !canSaveNickname)
+        } footer: {
+            Text("车队成员、聊天、轨迹全线显示昵称；当前：\(settings.userNickname.isEmpty ? "未设置（显示用户名）" : settings.userNickname)")
+        }
+    }
+
+    private var canSaveNickname: Bool {
+        let n = nickname.trimmingCharacters(in: .whitespaces)
+        return n.count >= 2 && n.count <= 20 && n != settings.userNickname
+    }
+
+    private func saveNickname() {
+        guard !busyNick else { return }
+        let base = cloud.normalizedBaseURL
+        guard !base.isEmpty else {
+            showMsg("请先到「设置 → 云同步」填写服务器地址", isError: true)
+            return
+        }
+        let n = nickname.trimmingCharacters(in: .whitespaces)
+        busyNick = true
+        message = ""
+        Task {
+            do {
+                _ = try await AccountApi.updateProfile(base: base, token: settings.userToken, nickname: n)
+                await MainActor.run {
+                    busyNick = false
+                    settings.userNickname = n
+                    showMsg("昵称已保存：\(n)", isError: false)
+                }
+            } catch let e as AccountApi.ApiError {
+                await MainActor.run {
+                    busyNick = false
+                    showMsg(AccountApi.ApiError.friendly(e), isError: true)
+                }
+            } catch {
+                await MainActor.run {
+                    busyNick = false
+                    showMsg("无法连接服务器：\(error.localizedDescription)", isError: true)
+                }
+            }
         }
     }
 
@@ -244,10 +307,14 @@ struct AccountPage: View {
             do {
                 let me = try await AccountApi.me(base: base, token: settings.userToken, deviceNo: no)
                 await MainActor.run {
-                    if let u = me["user"] as? [String: Any],
-                       let trial = u["trialDaysLeft"] as? Int, trial >= 0 {
-                        settings.userTrialDays = trial
-                    }
+                if let u = me["user"] as? [String: Any],
+                   let trial = u["trialDaysLeft"] as? Int, trial >= 0 {
+                    settings.userTrialDays = trial
+                }
+                if let u = me["user"] as? [String: Any],
+                   let nk = u["nickname"] as? String {
+                    settings.userNickname = nk
+                }
                     var boundName = ""
                     var authExpires = ""
                     if let dev = me["device"] as? [String: Any], dev["bound"] as? Bool == true,
@@ -340,6 +407,7 @@ struct AccountPage: View {
         settings.userToken = r["token"] as? String ?? ""
         if let u = r["user"] as? [String: Any] {
             settings.userName = u["username"] as? String ?? fallbackName
+            settings.userNickname = u["nickname"] as? String ?? ""
             settings.userTrialDays = u["trialDaysLeft"] as? Int ?? 0
             if let model = u["vehicleModel"] as? String, !model.isEmpty {
                 settings.deviceModelHint = model
@@ -375,6 +443,7 @@ struct AccountPage: View {
     private func logout() {
         settings.userToken = ""
         settings.userName = ""
+        settings.userNickname = ""
         settings.userTrialDays = 0
         settings.boundVehicle = ""
         message = ""

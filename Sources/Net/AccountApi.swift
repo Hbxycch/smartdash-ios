@@ -19,6 +19,7 @@ enum AccountApi {
             switch e.code {
             case "USERNAME_TAKEN": return "该用户名已被注册"
             case "PHONE_TAKEN": return "该手机号已注册"
+            case "NICKNAME_TAKEN": return "该昵称已被占用，换一个试试"
             case "PASSWORD_WEAK": return e.message
             case "BAD_CREDENTIALS": return "用户名或密码不对"
             case "USER_LOCKED": return e.message.isEmpty ? "账号已锁定，稍后再试" : e.message
@@ -73,6 +74,12 @@ enum AccountApi {
 
     static func passwordPolicy(base: String) async throws -> [String: Any] {
         try await call(base + "/api/v1/user/password-policy", method: "GET", body: nil, token: nil)
+    }
+
+    /// 资料更新：昵称（2~20 字，全服唯一，重名 409 NICKNAME_TAKEN）
+    static func updateProfile(base: String, token: String, nickname: String) async throws -> [String: Any] {
+        try await call(base + "/api/v1/user/profile", method: "PUT",
+                       body: ["nickname": nickname], token: token)
     }
 
     /// 认领：把本机 device_no 切到该账号名下原车的 device_no（换屏/换机后找回历史数据）
