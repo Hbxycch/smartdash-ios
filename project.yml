@@ -44,7 +44,7 @@ targets:
       - path: Sources
     dependencies:
       - package: LiveKit
-        product: LiveKitSDK
+        product: LiveKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.smartdash.monitor.ios

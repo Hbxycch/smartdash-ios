@@ -1,6 +1,6 @@
 import Foundation
 import AVFoundation
-import LiveKitSDK
+import LiveKit
 
 /// 语音对讲封装（LiveKit SFU @ NAS:7880），与 Android FleetVoice 同口径。
 ///
