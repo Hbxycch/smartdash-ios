@@ -18,15 +18,20 @@ struct RootView: View {
     @State private var showUpdate = false
     @State private var showCtrlScan = false
     @State private var showMessages = false
+    @State private var showAccount = false
+    @State private var showFleet = false
 
     var body: some View {
         ZStack {
             DashboardBackground()
 
-            VStack(spacing: 0) {
-                topBar
-                content
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HStack(spacing: 0) {
+                sideDock
+                VStack(spacing: 0) {
+                    topBar
+                    content
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
         .onAppear {
@@ -82,6 +87,20 @@ struct RootView: View {
                 .environmentObject(updater)
                 .environmentObject(cloud)
         }
+        .fullScreenCover(isPresented: $showAccount) {
+            NavigationStack {
+                AccountPage()
+                    .environmentObject(settings)
+                    .environmentObject(cloud)
+            }
+        }
+        .fullScreenCover(isPresented: $showFleet) {
+            NavigationStack {
+                FleetPage()
+                    .environmentObject(settings)
+                    .environmentObject(cloud)
+            }
+        }
         .sheet(isPresented: $showMessages) {
             MessageCenterPage()
                 .environmentObject(settings)
@@ -102,6 +121,119 @@ struct RootView: View {
         }
     }
 
+    // MARK: - 左侧玻璃 Dock
+
+    private var sideDock: some View {
+        let p = settings.palette
+        return VStack(spacing: 0) {
+            // 时钟置顶
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                Text(ctx.date, format: .dateTime.hour().minute())
+                    .font(.system(size: 23, weight: .bold, design: .monospaced))
+                    .foregroundColor(p.textPrimary.opacity(0.95))
+                    .padding(.top, 12)
+            }
+
+            // 仪表 / BMS / 定位（显隐由设置页页签开关控制，见 visibleTabs）
+            ForEach(settings.visibleTabs) { kind in
+                dockItem(icon: kind.icon, title: kind.title,
+                         colors: Self.dockTabColors[kind] ?? [],
+                         selected: tab == kind) {
+                    withAnimation(.easeInOut(duration: 0.15)) { tab = kind }
+                }
+                .padding(.top, 16)
+            }
+
+            // 车队 / 个人中心：独立整屏页
+            dockItem(icon: "person.3.fill", title: "车队",
+                     colors: [Color(hex: 0xA97BFF), Color(hex: 0x7C4DE0)],
+                     selected: false) { showFleet = true }
+                .padding(.top, 16)
+
+            dockItem(icon: "person.crop.circle", title: "个人中心",
+                     colors: [Color(hex: 0x4DD8D2), Color(hex: 0x23A8B8)],
+                     selected: false) { showAccount = true }
+                .padding(.top, 16)
+
+            Spacer(minLength: 0)
+
+            // 设置钉在 Dock 底部（半透明玻璃块）
+            Rectangle().fill(p.stroke.opacity(0.5))
+                .frame(width: 32, height: 1)
+                .padding(.bottom, 12)
+
+            dockItem(icon: "gearshape.fill", title: "设置", colors: nil,
+                     selected: false) { showSettings = true }
+        }
+        .frame(width: 100)
+        .padding(.bottom, 16)
+        .background(dockBackground(p))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .padding(.leading, 14)
+        .padding(.vertical, 14)
+    }
+
+    /// 选中态：恢复全彩 + 白圈 + 左侧指示条；未选中整体压暗
+    private func dockItem(icon: String, title: String, colors: [Color]?,
+                          selected: Bool, action: @escaping () -> Void) -> some View {
+        let p = settings.palette
+        return Button(action: action) {
+            ZStack(alignment: .leading) {
+                if let colors = colors {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(LinearGradient(colors: colors,
+                                             startPoint: .topLeading,
+                                             endPoint: .bottomTrailing))
+                } else {
+                    // 设置：半透明玻璃块
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(p.dark ? Color.white.opacity(0.12) : Color.white.opacity(0.66))
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(p.dark ? Color.white.opacity(0.16) : p.stroke, lineWidth: 1))
+                }
+                Image(systemName: icon)
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundColor(p.dark ? .white : (colors == nil ? p.textSecondary : .white))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if selected {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.white.opacity(0.95), lineWidth: 2.5)
+                    Rectangle()
+                        .fill(Color(hex: 0x4DA3FF))
+                        .frame(width: 3.5, height: 24)
+                        .cornerRadius(2)
+                        .offset(x: -11)
+                }
+            }
+            .frame(width: 56, height: 56)
+            .opacity(selected ? 1 : 0.55)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
+
+    /// 玻璃面板：深色主题深蓝玻璃，浅色主题白色磨砂
+    private func dockBackground(_ p: Palette) -> some View {
+        RoundedRectangle(cornerRadius: 26, style: .continuous)
+            .fill(p.dark
+                  ? LinearGradient(colors: [Color(hex: 0x263254).opacity(0.60),
+                                            Color(hex: 0x101729).opacity(0.50)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                  : LinearGradient(colors: [Color.white.opacity(0.82),
+                                            Color.white.opacity(0.62)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(p.dark ? Color.white.opacity(0.10) : Color.white.opacity(0.85),
+                        lineWidth: 1))
+            .shadow(color: .black.opacity(p.dark ? 0.45 : 0.12), radius: 14, y: 6)
+    }
+
+    private static let dockTabColors: [TabKind: [Color]] = [
+        .dashboard: [Color(hex: 0x4DA3FF), Color(hex: 0x2C6FD6)],
+        .battery: [Color(hex: 0x61D98B), Color(hex: 0x2FB968)],
+        .location: [Color(hex: 0xFF9F4D), Color(hex: 0xE2701F)],
+    ]
+
     // MARK: - 顶栏
 
     private var topBar: some View {
@@ -112,27 +244,6 @@ struct RootView: View {
                 .foregroundColor(p.textPrimary)
                 .lineLimit(1)
                 .layoutPriority(0.5)
-
-            HStack(spacing: 4) {
-                ForEach(settings.visibleTabs) { t in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) { tab = t }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: t.icon).font(.system(size: 11, weight: .semibold))
-                            Text(t.title).font(.system(size: 12, weight: .medium))
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .foregroundColor(tab == t ? p.bgDeep : p.textSecondary)
-                        .background(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(tab == t ? p.accent : Color.clear)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
 
             Spacer(minLength: 4)
 
@@ -201,18 +312,6 @@ struct RootView: View {
                                 .offset(x: 5, y: -4)
                         }
                     }
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                showSettings = true
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(p.textPrimary)
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(p.panel.opacity(0.9)))
-                    .overlay(Circle().stroke(p.stroke, lineWidth: 1))
             }
             .buttonStyle(.plain)
         }
