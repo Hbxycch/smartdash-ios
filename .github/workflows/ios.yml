@@ -112,7 +112,8 @@ jobs:
             || /usr/libexec/PlistBuddy -c "Add :AMapAPIKey string ${AMAP_API_KEY}" "$APP/Info.plist"
           echo "已写入 AMapAPIKey（长度 ${#AMAP_API_KEY}）"
 
-      - name: 打包 unsigned IPA
+      - name: 打包 unsigned IPA（文件名带版本号）
+        id: ipa
         run: |
           set -euo pipefail
           APP="build/Build/Products/Release-iphoneos/SmartDash.app"
@@ -121,23 +122,92 @@ jobs:
             ls -R build/Build/Products || true
             exit 1
           fi
-          rm -rf Payload SmartDash-unsigned.ipa
+          # 版本号来源：tag 构建（v4.25）取 tag；其余取 project.yml 的 MARKETING_VERSION
+          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            VER=$(sed -n 's/.*MARKETING_VERSION:[[:space:]]*"\([^"]*\)".*/\1/p' project.yml | head -1)
+          fi
+          IPA="SmartDash-v${VER}-unsigned.ipa"
+          rm -rf Payload "$IPA"
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload SmartDash-unsigned.ipa
-          ls -lh SmartDash-unsigned.ipa
-          echo "SHA256: $(shasum -a 256 SmartDash-unsigned.ipa | cut -d' ' -f1)"
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload "$IPA"
+          ls -lh "$IPA"
+          SHA=$(shasum -a 256 "$IPA" | cut -d' ' -f1)
+          echo "SHA256: $SHA"
+          {
+            echo "name=$IPA"
+            echo "version=$VER"
+            echo "sha256=$SHA"
+          } >> "$GITHUB_OUTPUT"
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: SmartDash-unsigned-ipa
-          path: SmartDash-unsigned.ipa
+          name: ${{ steps.ipa.outputs.name }}
+          path: ${{ steps.ipa.outputs.name }}
           retention-days: 30
+
+      # 把 ipa 推到 dist 分支，raw.githubusercontent.com 即为可 curl 的直链
+      # 文件名带版本号，历史版本在 dist 分支上持续保留可下载
+      - name: 发布 raw 直链（dist 分支）
+        if: github.event_name != 'pull_request'
+        env:
+          IPA_NAME: ${{ steps.ipa.outputs.name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin dist >/dev/null 2>&1; then
+            git fetch origin dist --depth=1
+            git checkout -B dist FETCH_HEAD
+          else
+            git checkout --orphan dist
+            git rm -rf --cached . -q || true
+          fi
+          git add -f "$IPA_NAME"
+          git commit -m "ipa $IPA_NAME (run #${GITHUB_RUN_NUMBER})" -q
+          git push origin dist
+          RAW="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist/${IPA_NAME}"
+          echo "RAW_URL=$RAW" >> "$GITHUB_ENV"
+          echo "IPA raw 直链: $RAW"
 
       - name: 打 tag 时发布 Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: SmartDash-unsigned.ipa
+          files: ${{ steps.ipa.outputs.name }}
           generate_release_notes: true
+
+      - name: 输出下载地址
+        if: always() && steps.ipa.outcome == 'success'
+        env:
+          IPA_NAME: ${{ steps.ipa.outputs.name }}
+        run: |
+          RAW="${RAW_URL:-https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist/${IPA_NAME}}"
+          REL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${{ steps.ipa.outputs.version }}/${IPA_NAME}"
+          {
+            echo "## 📦 本次构建产物"
+            echo ""
+            echo "| 项 | 值 |"
+            echo "|---|---|"
+            echo "| 版本 | v${{ steps.ipa.outputs.version }} |"
+            echo "| 文件 | \`${IPA_NAME}\` |"
+            echo "| SHA256 | \`${{ steps.ipa.outputs.sha256 }}\` |"
+            echo ""
+            echo "**raw 直链（可 curl 直接下载）：**"
+            echo ""
+            echo "```"
+            echo "$RAW"
+            echo "```"
+            echo ""
+            if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+              echo "**Release 附件直链：**"
+              echo ""
+              echo "```"
+              echo "$REL"
+              echo "```"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "IPA raw 直链: $RAW"
