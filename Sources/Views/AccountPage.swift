@@ -18,6 +18,7 @@ struct AccountPage: View {
     @State private var phone = ""
     @State private var email = ""
     @State private var vehicle = ""
+    @State private var regNickname = ""
     @State private var loginPwd = ""
     @State private var nickname = ""
     @State private var busyNick = false
@@ -203,6 +204,7 @@ struct AccountPage: View {
             SecureField("确认密码（再输入一次）", text: $password2)
             TextField("手机号（必填，用于找回密码）", text: $phone)
                 .keyboardType(.phonePad)
+            TextField("昵称（选填，2~20 字，全服唯一）", text: $regNickname)
             TextField("邮箱（选填，用于接收报表与告警）", text: $email)
                 .keyboardType(.emailAddress)
                 .textInputAutocapitalization(.never)
@@ -371,6 +373,7 @@ struct AccountPage: View {
         guard pwd.count >= 6 else { showMsg("密码至少 6 位", isError: true); return }
 
         let regPhone: String
+        let regNickname: String
         if registerMode {
             let p = phone.trimmingCharacters(in: .whitespaces)
             guard pwd == password2 else { showMsg("两次输入的密码不一致", isError: true); return }
@@ -378,10 +381,16 @@ struct AccountPage: View {
             guard p.range(of: "^1[3-9]\\d{9}$", options: .regularExpression) != nil else {
                 showMsg("手机号格式不正确（11 位，1 开头）", isError: true); return
             }
+            let nk = self.regNickname.trimmingCharacters(in: .whitespaces)
+            if !nk.isEmpty && nk.count < 2 {
+                showMsg("昵称至少 2 个字符", isError: true); return
+            }
             if let err = checkPolicy(pwd) { showMsg(err, isError: true); return }
             regPhone = p
+            regNickname = nk
         } else {
             regPhone = ""
+            regNickname = ""
         }
 
         busy = true
@@ -397,7 +406,8 @@ struct AccountPage: View {
                     ? try await AccountApi.register(base: base, username: user, password: pwd,
                                                     phone: regPhone, email: emailText,
                                                     vehicleModel: vehicleModel,
-                                                    deviceNo: deviceNo, deviceFp: fp)
+                                                    deviceNo: deviceNo, deviceFp: fp,
+                                                    nickname: regNickname)
                     : try await AccountApi.login(base: base, username: user, password: pwd,
                                                  deviceNo: deviceNo)
                 await MainActor.run { applySession(r, registered: registerMode, fallbackName: user) }

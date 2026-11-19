@@ -44,10 +44,12 @@ enum AccountApi {
     /// 注册：自动 7 天试用，注册即登录（返回用户 token）
     static func register(base: String, username: String, password: String,
                          phone: String, email: String, vehicleModel: String,
-                         deviceNo: String, deviceFp: String) async throws -> [String: Any] {
+                         deviceNo: String, deviceFp: String,
+                         nickname: String = "") async throws -> [String: Any] {
         var body: [String: Any] = [
             "username": username, "password": password, "phone": phone,
         ]
+        if !nickname.isEmpty { body["nickname"] = nickname }
         if !email.isEmpty { body["email"] = email }
         if !vehicleModel.isEmpty { body["vehicleModel"] = vehicleModel }
         if !deviceNo.isEmpty { body["deviceNo"] = deviceNo }
