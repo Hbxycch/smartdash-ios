@@ -16,12 +16,20 @@ struct GaugeStyle2Page: View {
     var body: some View {
         GeometryReader { geo in
             HStack(alignment: .top, spacing: 12) {
-                leftColumn
-                    .frame(width: min(geo.size.width * 0.22, 250))
+                // 左/右列在小屏（iPhone 横屏）放不下时各自滚动，避免底部被截断
+                ScrollView(showsIndicators: false) {
+                    leftColumn
+                }
+                .frame(width: min(geo.size.width * 0.22, 250))
+
                 centerColumn
-                rightColumn
-                    .frame(width: min(geo.size.width * 0.22, 250))
+
+                ScrollView(showsIndicators: false) {
+                    rightColumn
+                }
+                .frame(width: min(geo.size.width * 0.22, 250))
             }
+            .frame(height: geo.size.height)
         }
         .padding(12)
     }

@@ -132,7 +132,13 @@ final class AppSettings: ObservableObject {
 
     // ── 升级 ──
     @Published var autoCheckUpdate: Bool { didSet { d.set(autoCheckUpdate, forKey: "auto_update") } }
+    /// 更新清单原始值：留空 = 静默走内置更新源（与 Android 同款行为，页面不展示具体地址）
     @Published var updateManifestURL: String { didSet { d.set(updateManifestURL, forKey: "update_url") } }
+    /// 检查更新实际使用的清单地址：留空回落出厂默认
+    var resolvedManifestURL: String {
+        let s = updateManifestURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        return s.isEmpty ? CloudSync.Defaults.manifest : s
+    }
 
     // ── 蓝牙日志 ──
     @Published var btLogEnabled: Bool { didSet { d.set(btLogEnabled, forKey: "bt_log_enabled") } }
@@ -163,10 +169,8 @@ final class AppSettings: ObservableObject {
         voiceFreeMic = ud.object(forKey: "voice_free_mic") as? Bool ?? false
         locationEnabled = ud.object(forKey: "gps_enabled") as? Bool ?? true
         autoCheckUpdate = ud.object(forKey: "auto_update") as? Bool ?? true
-        // 升级清单出厂预填：清空后回落默认，保证「启动时检查更新」开箱可用
-        let savedURL = ud.string(forKey: "update_url") ?? ""
-        updateManifestURL = savedURL.trimmingCharacters(in: .whitespaces).isEmpty
-            ? CloudSync.Defaults.manifest : savedURL
+        // 更新清单留空 = 静默走内置更新源（不再把默认地址明文预填进输入框）
+        updateManifestURL = ud.string(forKey: "update_url") ?? ""
         btLogEnabled = ud.object(forKey: "bt_log_enabled") as? Bool ?? true
     }
 

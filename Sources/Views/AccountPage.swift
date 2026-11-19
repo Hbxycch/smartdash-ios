@@ -89,6 +89,17 @@ struct AccountPage: View {
                     .foregroundColor(authExpired ? .orange : .secondary)
                     .monospacedDigit()
             }
+            Button {
+                cloud.syncAuthNow()
+            } label: {
+                HStack {
+                    Label("同步授权", systemImage: "arrow.triangle.2.circlepath")
+                    Spacer()
+                    Text("重新上报本机档案并拉取最新授权状态")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
             NavigationLink {
                 FleetPage()
             } label: {
@@ -431,6 +442,10 @@ struct AccountPage: View {
         }
         settings.boundVehicle = boundName
         busy = false
+
+        // 登录即上报设备档案（对齐 Android announceBlocking）：
+        // 后台台账立刻可见；管理员已预绑激活码时响应带 deviceToken，自动完成激活
+        cloud.announceBlockingNow()
 
         let trial = settings.userTrialDays
         if registered, trial > 0 {

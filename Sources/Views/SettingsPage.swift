@@ -16,6 +16,8 @@ struct SettingsPage: View {
     @State private var showLogPage = false
     @State private var showCrashPreview = false
     @State private var showScanner = false          // 授权码扫码
+    @State private var showServerEditor = false     // 上报服务器地址编辑
+    @State private var showUpdateEditor = false     // 检查更新地址编辑
 
     var body: some View {
         NavigationStack {
@@ -68,6 +70,22 @@ struct SettingsPage: View {
                     cloud.code = AuthCode.normalize(code)
                 }
                 .ignoresSafeArea()
+            }
+            .sheet(isPresented: $showServerEditor) {
+                addressEditorSheet(
+                    title: "云端服务器",
+                    text: $cloud.baseURL,
+                    hint: "默认不用填，App 直接使用内置服务器地址（页面上不显示具体地址）。\n要切换私有部署时再填：域名/端口即可，不用带 /api/v1。",
+                    placeholder: "留空使用默认服务器；私有部署填 https://… 或 http://192.168.7.252:8081",
+                    presented: $showServerEditor)
+            }
+            .sheet(isPresented: $showUpdateEditor) {
+                addressEditorSheet(
+                    title: "更新服务器地址",
+                    text: $settings.updateManifestURL,
+                    hint: "默认不用填，App 直接使用内置更新源检查新版本（页面上不显示具体地址）。\n要自建更新源时再填版本清单 JSON 的地址。",
+                    placeholder: "留空使用默认更新源；或填 http://<主机IP>/ota/version.json",
+                    presented: $showUpdateEditor)
             }
             .onChange(of: bgPickerItem) { item in
                 guard let item else { return }
@@ -293,16 +311,41 @@ struct SettingsPage: View {
 
     private var gaugeSection: some View {
         Section("仪表控制") {
-            Picker("仪表样式", selection: $settings.gaugeStyle) {
-                Text("样式 1").tag(1)
-                Text("样式 2").tag(2)
-                Text("样式 3").tag(3)
+            // 与 Android 同款四选项分段：默认 / 经典 / 特斯拉 / CarPlay（后两项未开放，置灰）
+            HStack(spacing: 4) {
+                gaugeSeg(1, "默认")
+                gaugeSeg(2, "经典")
+                gaugeSeg(3, "特斯拉", locked: true)
+                gaugeSeg(4, "CarPlay", locked: true)
             }
-            .pickerStyle(.segmented)
-            Text("样式 1 经典版式（码表 + 地图）；样式 2 三栏仪表（电量/电压/电流/温度 + 弧形码表）。样式 3 后续版本提供。")
+            .padding(4)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(Color.secondary.opacity(0.12)))
+            Text("仪表首页的版式。默认：码表 + 地图；经典：三栏仪表（电量/电压/电流/温度 + 弧形码表）。特斯拉 / CarPlay 风格未开放。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }
+    }
+
+    private func gaugeSeg(_ value: Int, _ title: String, locked: Bool = false) -> some View {
+        let on = settings.gaugeStyle == value
+        return Button {
+            guard !locked else { return }
+            settings.gaugeStyle = value
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: on ? .semibold : .regular))
+                .foregroundColor(locked ? .secondary.opacity(0.5)
+                                 : (on ? .primary : .secondary))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(on ? Color.accentColor.opacity(0.85) : .clear))
+        }
+        .buttonStyle(.plain)
+        .disabled(locked)
     }
 
     // MARK: - 地图
@@ -495,10 +538,22 @@ struct SettingsPage: View {
             }
 
             if cloud.enabled {
-                TextField("服务器地址，如 http://192.168.7.252:8081", text: $cloud.baseURL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
+                // 服务器地址：默认留空走内置（页面上不展示具体地址），私有部署再填（与 Android 同款）
+                Button { showServerEditor = true } label: {
+                    HStack {
+                        Text("上报服务器地址")
+                        Spacer()
+                        Text(cloud.baseURL.trimmingCharacters(in: .whitespaces).isEmpty
+                             ? "默认 · 使用内置服务器" : cloud.normalizedBaseURL)
+                            .font(.system(size: 12))
+                            .foregroundColor(cloud.baseURL.trimmingCharacters(in: .whitespaces).isEmpty
+                                             ? .secondary : .accentColor)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
 
                 HStack(spacing: 10) {
                     TextField("授权码 XXXXX-XXXXX-XXXXX-XXXXX-XXXXX", text: $cloud.code)
@@ -593,17 +648,62 @@ struct SettingsPage: View {
         }
     }
 
+    /// 地址编辑弹层（对齐 Android editCloudServer / editUpdateUrl：留空即恢复内置默认）
+    private func addressEditorSheet(title: String, text: Binding<String>,
+                                    hint: String, placeholder: String,
+                                    presented: Binding<Bool>) -> some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(placeholder, text: text)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                } footer: {
+                    Text(hint)
+                }
+                Section {
+                    Button(role: .destructive) {
+                        text.wrappedValue = ""
+                    } label: {
+                        Text("清空，恢复使用内置默认")
+                    }
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { presented.wrappedValue = false }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
     // MARK: - 升级
 
     private var updateSection: some View {
         Section("在线升级") {
             Toggle("启动时检查更新", isOn: $settings.autoCheckUpdate)
-            TextField("version.json 地址", text: $settings.updateManifestURL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
+            // 更新源：默认留空走内置（页面上不展示具体地址），自建更新源再填（与 Android 同款）
+            Button { showUpdateEditor = true } label: {
+                HStack {
+                    Text("检查更新地址")
+                    Spacer()
+                    Text(settings.updateManifestURL.trimmingCharacters(in: .whitespaces).isEmpty
+                         ? "默认 · 使用内置更新源" : settings.resolvedManifestURL)
+                        .font(.system(size: 12))
+                        .foregroundColor(settings.updateManifestURL.trimmingCharacters(in: .whitespaces).isEmpty
+                                         ? .secondary : .accentColor)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
             Button {
-                updater.check(manifestURL: settings.updateManifestURL, currentBuild: UpdateChecker.currentBuild)
+                updater.check(manifestURL: settings.resolvedManifestURL, currentBuild: UpdateChecker.currentBuild)
             } label: {
                 HStack {
                     Label("立即检查", systemImage: "arrow.triangle.2.circlepath")

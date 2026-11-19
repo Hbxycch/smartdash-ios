@@ -34,8 +34,9 @@ struct RootView: View {
             UIApplication.shared.isIdleTimerDisabled = true
             location.start(enabled: settings.locationEnabled)
             cloud.start(bms: service, location: location, settings: settings)
-            if settings.autoCheckUpdate, !settings.updateManifestURL.isEmpty {
-                updater.check(manifestURL: settings.updateManifestURL,
+            if settings.autoCheckUpdate {
+                // 地址留空时 resolvedManifestURL 静默回落内置更新源
+                updater.check(manifestURL: settings.resolvedManifestURL,
                               currentBuild: UpdateChecker.currentBuild)
             }
             // 控制器链路：错开 BMS 的连接高峰，稍晚一点用上次的 identifier 直连

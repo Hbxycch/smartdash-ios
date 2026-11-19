@@ -148,12 +148,10 @@ final class CloudSync: ObservableObject {
 
     init() {
         let d = UserDefaults.standard
-        // 云同步默认打开（v4.11 起）：地址已出厂预填，装上即可上报；
-        // 用户手动关过就以用户为准。地址清空时回落默认。
+        // 云同步默认打开（v4.11 起）：地址留空 = 静默走内置服务器（不再明文预填），
+        // 用户手动关过就以用户为准；私有部署时再在设置里填自定义地址。
         enabled = d.object(forKey: Key.enabled) as? Bool ?? true
-        let savedBase = d.string(forKey: Key.base) ?? ""
-        baseURL = savedBase.trimmingCharacters(in: .whitespaces).isEmpty
-            ? Defaults.server : savedBase
+        baseURL = d.string(forKey: Key.base) ?? ""
         code = d.string(forKey: Key.code) ?? ""
         token = d.string(forKey: Key.token) ?? ""
         telemetryIntervalS = max(5, d.object(forKey: Key.telInterval) as? Int ?? 10)
@@ -167,8 +165,8 @@ final class CloudSync: ObservableObject {
         deviceNo = no
 
         if enabled {
-            phase = (token.isEmpty || baseURL.trimmingCharacters(in: .whitespaces).isEmpty)
-                ? .needConfig : .ready
+            // 地址留空 = 静默走内置服务器，不算缺配置；只有没拿到设备令牌才算未激活
+            phase = token.isEmpty ? .needConfig : .ready
         }
         refreshCounts()
     }
@@ -236,6 +234,14 @@ final class CloudSync: ObservableObject {
     private func tick() {
         guard enabled else { return }
         autoEnrollIfNeeded()
+
+        // 已登录、既无设备令牌也没填授权码：上报设备档案（对齐 Android CloudSync.maybeAnnounce），
+        // 管理员在后台给这台设备绑定激活码后，一分钟内自动拿到 deviceToken 完成激活
+        if token.isEmpty,
+           code.trimmingCharacters(in: .whitespaces).isEmpty,
+           let settings, !settings.userToken.isEmpty {
+            maybeAnnounce()
+        }
 
         guard !normalizedBaseURL.isEmpty else { return }
 
@@ -529,6 +535,92 @@ final class CloudSync: ObservableObject {
         Task { await enroll() }
     }
 
+    // MARK: - 登录未激活的档案上报（announce）
+
+    private var lastAnnounceAt = Date.distantPast
+
+    /// 60 秒节流，失败静默：管理员刚绑完码最多一分钟内自动激活，无需重启 App
+    private func maybeAnnounce() {
+        guard Date().timeIntervalSince(lastAnnounceAt) >= 60 else { return }
+        lastAnnounceAt = Date()
+        Task { await announceDevice() }
+    }
+
+    /// 登录成功后立即上报档案（对齐 Android announceBlocking）：
+    /// 建/认领设备行 + 管理员已预绑激活码时自动激活。
+    func announceBlockingNow() {
+        guard let settings, !settings.userToken.isEmpty else { return }
+        lastAnnounceAt = Date()
+        Task { await announceDevice() }
+    }
+
+    /// 同步授权（对齐 Android ProfileActivity.syncAuth）：重报档案 + 回读 /me，
+    /// 管理员刚绑的激活码立即生效；状态写进 statusText 供设置页展示。
+    func syncAuthNow() {
+        guard let settings, !settings.userToken.isEmpty else {
+            statusText = "请先登录后再同步授权"
+            return
+        }
+        lastAnnounceAt = Date()
+        statusText = "同步中…"
+        Task {
+            await announceDevice()
+            refreshUserState()
+            if phase == .ready { statusText = "授权已同步 · 设备号 \(deviceNo)" }
+        }
+    }
+
+    @MainActor
+    private func announceDevice() async {
+        guard let settings else { return }
+        let base = normalizedBaseURL
+        guard let url = URL(string: base + "/api/v1/user/device/announce") else { return }
+        var body: [String: Any] = [
+            "device_no": deviceNo,
+            "device_fp": AccountApi.fingerprint(),
+            // 车辆名优先级与 Android 一致：本机绑定名 > 注册时填的车型 > 默认
+            "model": !settings.boundVehicle.isEmpty
+                ? settings.boundVehicle
+                : (settings.deviceModelHint.isEmpty ? "SmartDash-T3" : settings.deviceModelHint),
+            "bms_vendor": settings.vendor.rawValue,
+            "fw_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
+            "platform": "ios",
+        ]
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 20
+        req.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(settings.userToken)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        do {
+            let (data, resp) = try await session.data(for: req)
+            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+                return   // 失败静默，60s 后 tick 会再试
+            }
+            if obj["activated"] as? Bool == true,
+               let newToken = obj["deviceToken"] as? String, !newToken.isEmpty {
+                token = newToken
+                UserDefaults.standard.set(newToken, forKey: Key.token)
+                if let no = obj["deviceNo"] as? String, !no.isEmpty {
+                    deviceNo = no
+                    UserDefaults.standard.set(no, forKey: Key.deviceNo)
+                }
+                failStreak = 0
+                backoffUntil = .distantPast
+                phase = .ready
+                statusText = "已激活，设备号 \(deviceNo)"
+                refreshUserState()
+                Task { await flush() }
+            } else {
+                statusText = "档案已上报，等待管理员绑定激活码"
+            }
+        } catch {
+            // 静默：网络异常下轮重试
+        }
+    }
+
     /// 激活成功后刷新账号态（与 Android CloudSync.refreshUserState 同口径）：
     /// 拉一次 /me，把剩余试用天数与本机绑定车辆名写回偏好。
     /// 失败静默——只是刷新展示，不影响激活结果；SwiftUI 会随 @Published 自动重绘。
@@ -558,10 +650,11 @@ final class CloudSync: ObservableObject {
 
     // MARK: - 杂项
 
-    /// 用户可能填 `192.168.7.252:8081`、`http://x/api/v1/`、带末尾斜杠的各种形态
+    /// 用户可能填 `192.168.7.252:8081`、`http://x/api/v1/`、带末尾斜杠的各种形态。
+    /// 留空 = 静默走内置服务器（与 Android 同款行为，页面上不展示具体地址）。
     var normalizedBaseURL: String {
         var s = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !s.isEmpty else { return "" }
+        if s.isEmpty { s = Defaults.server }
         if !s.lowercased().hasPrefix("http://") && !s.lowercased().hasPrefix("https://") {
             s = "http://" + s
         }
