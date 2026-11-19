@@ -28,7 +28,7 @@ final class FleetVoice: ObservableObject {
         Task {
             do {
                 let r = Room()
-                try await r.connect(url, token)
+                try await r.connect(url: url, token: token)
                 // 车机外放：语音聊天模式 + 强制扬声器
                 let s = AVAudioSession.sharedInstance()
                 try? s.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
