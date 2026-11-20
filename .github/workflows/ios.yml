@@ -149,49 +149,49 @@ jobs:
           path: ${{ steps.ipa.outputs.name }}
           retention-days: 30
 
-      # 把 ipa 推到 dist 分支，raw.githubusercontent.com 即为可 curl 的直链
-      # 文件名带版本号，历史版本在 dist 分支上持续保留可下载
-      - name: 发布 raw 直链（dist 分支）
-        if: github.event_name != 'pull_request'
-        env:
-          IPA_NAME: ${{ steps.ipa.outputs.name }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git ls-remote --exit-code --heads origin dist >/dev/null 2>&1; then
-            git fetch origin dist --depth=1
-            git checkout -B dist FETCH_HEAD
-          else
-            git checkout --orphan dist
-            git rm -rf --cached . -q || true
-          fi
-          git add -f "$IPA_NAME"
-          git commit -m "ipa $IPA_NAME (run #${GITHUB_RUN_NUMBER})" -q
-          # push 带重试：runner 偶发网络抖动会导致 Release 被连带跳过
-          ok=0
-          for i in 1 2 3; do
-            if git push origin dist 2>dist_push_err.log; then ok=1; break; fi
-            echo "::warning::dist push 第 $i 次失败："
-            cat dist_push_err.log || true
-            sleep 15
-            git fetch origin dist --depth=1 2>/dev/null || true
-          done
-          if [ "$ok" != "1" ]; then
-            echo "::error::dist push 连续 3 次失败，真实报错如下："
-            cat dist_push_err.log | while IFS= read -r line; do echo "::error::$line"; done
-            exit 1
-          fi
-          RAW="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist/${IPA_NAME}"
-          echo "RAW_URL=$RAW" >> "$GITHUB_ENV"
-          echo "IPA raw 直链: $RAW"
-
+      # 先发 Release 再推 dist：dist 偶发失败不能拖累 Release（v4.26 tag 连续 3 次卡 dist）
       - name: 打 tag 时发布 Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.ipa.outputs.name }}
           generate_release_notes: true
+
+      # 把 ipa 推到 dist 分支，raw.githubusercontent.com 即为可 curl 的直链
+      # 文件名带版本号，历史版本在 dist 分支上持续保留可下载
+      # continue-on-error：dist 只是直链便利层，失败标红但不影响已发布的 Release
+      - name: 发布 raw 直链（dist 分支）
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        env:
+          IPA_NAME: ${{ steps.ipa.outputs.name }}
+        run: |
+          dist_publish() {
+            set -euo pipefail
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if git ls-remote --exit-code --heads origin dist >/dev/null 2>&1; then
+              git fetch origin dist --depth=1
+              git checkout -B dist FETCH_HEAD
+            else
+              git checkout --orphan dist
+              git rm -rf --cached . -q || true
+            fi
+            git add -f "$IPA_NAME"
+            git commit -m "ipa $IPA_NAME (run #${GITHUB_RUN_NUMBER})" -q
+            git push origin dist
+          }
+          # 整段捕获：真实报错逐行写成 ::error:: 注解（runner 日志接口外部拿不到）
+          if ! dist_publish > dist_out.log 2>&1; then
+            echo "::error::dist 发布失败，真实报错如下："
+            cat dist_out.log | while IFS= read -r line; do echo "::error::$line"; done
+            tail -20 dist_out.log
+            exit 1
+          fi
+          grep -o 'https://raw.githubusercontent.com/[^ ]*' dist_out.log | head -1 || true
+          RAW="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist/${IPA_NAME}"
+          echo "RAW_URL=$RAW" >> "$GITHUB_ENV"
+          echo "IPA raw 直链: $RAW"
 
       - name: 输出下载地址
         if: always() && steps.ipa.outcome == 'success'
