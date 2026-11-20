@@ -11,6 +11,7 @@ struct FleetMember: Identifiable, Equatable {
     let nickname: String
     let role: String
     let online: Bool
+    var avatarUrl: String = ""
     var isOwner: Bool { role == "owner" }
     /// 展示名：昵称优先（空则回退用户名），与 Android nameOf 同口径
     var displayName: String {
@@ -20,7 +21,7 @@ struct FleetMember: Identifiable, Equatable {
 
     static func == (l: FleetMember, r: FleetMember) -> Bool {
         l.id == r.id && l.username == r.username && l.nickname == r.nickname
-            && l.online == r.online && l.role == r.role
+            && l.online == r.online && l.role == r.role && l.avatarUrl == r.avatarUrl
     }
 }
 
@@ -203,7 +204,8 @@ final class FleetRoomVM: ObservableObject {
                         username: $0["username"] as? String ?? "",
                         nickname: $0["nickname"] as? String ?? "",
                         role: $0["role"] as? String ?? "member",
-                        online: ($0["online"] as? Bool) == true)
+                        online: ($0["online"] as? Bool) == true,
+                        avatarUrl: ($0["avatarUrl"] as? String) ?? ($0["avatar_url"] as? String) ?? "")
         }
         connecting = false
         if statusChip == "连接中…" { statusChip = "" }
@@ -528,17 +530,25 @@ struct FleetRoomPage: View {
         }
     }
 
-    /// 彩色圆头像 + 用户名首字（与 Android markerIcon 同色系）
+    /// 头像：有 avatarUrl 用远程头像（AvatarStore 缓存），否则彩色圆 + 首字
     private func avatar(_ m: FleetMember) -> some View {
         let color = FleetRoomVM.memberColor(m.id)
         let ch = String((m.displayName.isEmpty ? "队" : String(m.displayName.prefix(1))))
-        return ZStack {
-            Circle().fill(color)
-            Text(ch)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white)
+        if m.avatarUrl.isEmpty {
+            return AnyView(
+                ZStack {
+                    Circle().fill(color)
+                    Text(ch)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                .frame(width: 26, height: 26)
+            )
         }
-        .frame(width: 26, height: 26)
+        return AnyView(
+            RemoteAvatarView(url: m.avatarUrl, diameter: 26, fallbackText: ch, fallbackColor: color)
+                .environmentObject(settings)
+        )
     }
 
     // MARK: 右侧地图 + 浮层

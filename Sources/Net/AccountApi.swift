@@ -209,6 +209,66 @@ enum AccountApi {
         try await call(base + "/api/v1/user/fleet/voice-token", method: "GET", body: nil, token: token)
     }
 
+    // MARK: - 头像（与 Android AccountApi.avatar* 同口径）
+
+    /// 上传头像：multipart/form-data 字段 file，JPEG ≤10MB；返回 avatarUrl（带 ?v= 时间戳）
+    static func avatarUpload(base: String, token: String, jpeg: Data) async throws -> String {
+        let boundary = "----SmartDashAvatar\(UUID().uuidString)"
+        guard let u = URL(string: base + "/api/v1/user/avatar") else {
+            throw ApiError(status: 0, code: "BAD_URL", message: "服务器地址格式不对")
+        }
+        var req = URLRequest(url: u)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 60
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if !token.isEmpty { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        var body = Data()
+        body.append(Data("--\(boundary)\r\n".utf8))
+        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"avatar.jpg\"\r\n".utf8))
+        body.append(Data("Content-Type: image/jpeg\r\n\r\n".utf8))
+        body.append(jpeg)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        req.httpBody = body
+
+        let (data, resp) = try await session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else {
+            throw ApiError(status: 0, code: "BAD_RESPONSE", message: "服务器返回异常")
+        }
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        if !(200..<300).contains(http.statusCode) {
+            var code = "HTTP_\(http.statusCode)"
+            var msg = "上传失败（\(http.statusCode)）"
+            if let err = json["error"] as? [String: Any] {
+                code = err["code"] as? String ?? code
+                msg = err["message"] as? String ?? msg
+            }
+            throw ApiError(status: http.statusCode, code: code, message: msg)
+        }
+        let urlStr = (json["avatarUrl"] as? String) ?? (json["avatar_url"] as? String) ?? ""
+        guard !urlStr.isEmpty else { throw ApiError(status: http.statusCode, code: "NO_URL", message: "服务端未返回头像地址") }
+        return urlStr
+    }
+
+    /// 移除头像：恢复首字母默认头像；服务端清 avatar_url / avatar_ver
+    static func avatarRemove(base: String, token: String) async throws {
+        _ = try await call(base + "/api/v1/user/avatar", method: "DELETE", body: [:], token: token)
+    }
+
+    /// 头像原图（1280 内等比压缩后由服务端统一转 512×512 WebP）
+    static func avatarJPEG(_ image: UIImage, maxSide: CGFloat = 1280) -> Data? {
+        var img = image
+        let side = max(img.size.width, img.size.height)
+        if side > maxSide {
+            let scale = maxSide / side
+            let size = CGSize(width: img.size.width * scale, height: img.size.height * scale)
+            UIGraphicsBeginImageContextWithOptions(size, true, 1)
+            img.draw(in: CGRect(origin: .zero, size: size))
+            if let redrawn = UIGraphicsGetImageFromCurrentImageContext() { img = redrawn }
+            UIGraphicsEndImageContext()
+        }
+        return img.jpegData(compressionQuality: 0.85)
+    }
+
     // MARK: - 传输
 
     private static let session: URLSession = {

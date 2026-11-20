@@ -127,6 +127,8 @@ final class AppSettings: ObservableObject {
     @Published var deviceAuthExpires: String { didSet { d.set(deviceAuthExpires, forKey: "device_auth_expires") } }
     /// 车型（注册时填写，回传 model 字段用），空 = 用默认值
     @Published var deviceModelHint: String { didSet { d.set(deviceModelHint, forKey: "device_model_hint") } }
+    /// 头像地址（上传/移除后由 /avatar 与 /me 同步；URL 带 ?v= 破缓存），空 = 用首字母默认头像
+    @Published var userAvatarUrl: String { didSet { d.set(userAvatarUrl, forKey: "user_avatar_url") } }
 
     var isUserLoggedIn: Bool { !userToken.isEmpty }
 
@@ -178,6 +180,7 @@ final class AppSettings: ObservableObject {
         boundVehicle = ud.string(forKey: "bound_vehicle") ?? ""
         deviceAuthExpires = ud.string(forKey: "device_auth_expires") ?? ""
         deviceModelHint = ud.string(forKey: "device_model_hint") ?? ""
+        userAvatarUrl = ud.string(forKey: "user_avatar_url") ?? ""
         voiceFreeMic = ud.object(forKey: "voice_free_mic") as? Bool ?? false
         messagesUnread = ud.object(forKey: "messages_unread") as? Int ?? 0
         locationEnabled = ud.object(forKey: "gps_enabled") as? Bool ?? true

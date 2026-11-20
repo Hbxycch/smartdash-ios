@@ -267,13 +267,19 @@ struct SettingsPage: View {
             Button {
                 showAccount = true
             } label: {
-                HStack {
+                HStack(spacing: 10) {
+                    if settings.isUserLoggedIn {
+                        RemoteAvatarView(url: settings.userAvatarUrl,
+                                         diameter: 22,
+                                         fallbackText: settings.userNickname.isEmpty ? settings.userName : settings.userNickname,
+                                         fallbackColor: .cyan)
+                    }
                     Label("用户账号", systemImage: "person.crop.circle")
                     Spacer()
                     Text(settings.isUserLoggedIn
                          ? "已登录：\(settings.userName)"
                          : (settings.userTrialDays > 0 ? "试用剩 \(settings.userTrialDays) 天" : "未注册 · 点此创建账号或登录"))
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundColor(.secondary)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))

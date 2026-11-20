@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import PhotosUI
 
 /// 用户账号页：注册 / 登录（与 Android AccountActivity 同口径）。
 ///
@@ -29,10 +30,21 @@ struct AccountPage: View {
     @State private var policy: [String: Any]?
     @State private var showLogoutConfirm = false
 
+    // ── 头像（对齐设计稿 profile-avatar-upload V2）──
+    @State private var showAvatarActions = false
+    @State private var showPicker = false
+    @State private var pickedItem: PhotosPickerItem?
+    @State private var cropSource: UIImage?
+    @State private var showCamera = false
+    @State private var showAvatarBig = false
+    @State private var showRemoveConfirm = false
+    @State private var uploadingAvatar = false
+
     var body: some View {
         NavigationStack {
             Form {
                 if settings.isUserLoggedIn {
+                    avatarSection
                     sessionSection
                     nicknameSection
                 } else {
@@ -50,6 +62,61 @@ struct AccountPage: View {
                 }
             }
             .onAppear { loadPolicy(); refreshMe() }
+            .confirmationDialog("修改头像", isPresented: $showAvatarActions, titleVisibility: .visible) {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    Button("拍照上传") {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showCamera = true }
+                    }
+                }
+                Button("从相册选择") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showPicker = true }
+                }
+                if !settings.userAvatarUrl.isEmpty {
+                    Button("查看大图") { showAvatarBig = true }
+                }
+                if !settings.userAvatarUrl.isEmpty {
+                    Button("移除头像", role: .destructive) { showRemoveConfirm = true }
+                }
+            }
+            .photosPicker(isPresented: $showPicker, selection: $pickedItem, matching: .images)
+            .onChange(of: pickedItem) { item in
+                guard let item else { return }
+                item.loadTransferable(type: Data.self) { r in
+                    DispatchQueue.main.async {
+                        if case .success(let data) = r, let data,
+                           let img = UIImage(data: data) {
+                            cropSource = img
+                        }
+                        pickedItem = nil
+                    }
+                }
+            }
+            .fullScreenCover(isPresented: $showCamera) {
+                CameraPicker { img in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { cropSource = img }
+                }
+                .ignoresSafeArea()
+            }
+            .fullScreenCover(isPresented: Binding(get: { cropSource != nil }, set: { if !$0 { cropSource = nil } })) {
+                if let src = cropSource {
+                    AvatarCropSheet(source: src,
+                                    onCancel: { cropSource = nil },
+                                    onConfirm: { img in
+                                        cropSource = nil
+                                        uploadAvatar(img)
+                                    })
+                }
+            }
+            .fullScreenCover(isPresented: $showAvatarBig) {
+                AvatarBigView(url: settings.userAvatarUrl)
+                    .environmentObject(settings)
+            }
+            .alert("移除头像？", isPresented: $showRemoveConfirm) {
+                Button("移除", role: .destructive) { removeAvatar() }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("将恢复为昵称首字母默认头像，车队成员同步看到。")
+            }
             .alert("退出登录", isPresented: $showLogoutConfirm) {
                 Button("退出", role: .destructive) { logout() }
                 Button("取消", role: .cancel) {}
@@ -60,6 +127,114 @@ struct AccountPage: View {
     }
 
     // MARK: - 已登录
+
+    /// 头像区（设计稿图1）：可点头像 + 相机角标 + 引导文案
+    private var avatarSection: some View {
+        Section {
+            HStack(spacing: 14) {
+                Button {
+                    showAvatarActions = true
+                } label: {
+                    ZStack(alignment: .bottomTrailing) {
+                        RemoteAvatarView(url: settings.userAvatarUrl,
+                                         diameter: 72,
+                                         fallbackText: displayName,
+                                         fallbackColor: .brandCyan)
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.black)
+                            .frame(width: 26, height: 26)
+                            .background(Color.brandCyan, in: Circle())
+                            .overlay(Circle().stroke(Color.black.opacity(0.6), lineWidth: 2))
+                            .offset(x: 3, y: 3)
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(uploadingAvatar)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(displayName)
+                        .font(.system(size: 22, weight: .bold))
+                    Text(settings.userAvatarUrl.isEmpty ? "未设置头像" : "手机 \(maskPhone) · 已设置")
+                        .font(.system(size: 15))
+                        .foregroundColor(.secondary)
+                    Text(uploadingAvatar ? "正在上传头像…" : "点击头像可修改 ›")
+                        .font(.system(size: 13))
+                        .foregroundColor(uploadingAvatar ? .secondary : .cyan)
+                    if uploadingAvatar { ProgressView().padding(.top, 2) }
+                }
+                Spacer()
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private var displayName: String {
+        let n = settings.userNickname.trimmingCharacters(in: .whitespaces)
+        return n.isEmpty ? settings.userName : n
+    }
+
+    private var maskPhone: String {
+        settings.userName.count >= 7
+        ? settings.userName.prefix(3) + "****" + settings.userName.suffix(4)
+        : settings.userName
+    }
+
+    // MARK: - 头像上传 / 移除（与 Android ProfileActivity 同口径）
+
+    /// 选图完成（拍照 / 相册都汇入）→ 上传：压缩 → multipart POST → 存 avatarUrl
+    private func uploadAvatar(_ img: UIImage) {
+        let base = cloud.normalizedBaseURL
+        guard !base.isEmpty, settings.isUserLoggedIn else {
+            showMsg("请先登录并配置服务器地址", isError: true)
+            return
+        }
+        guard let jpeg = AccountApi.avatarJPEG(img) else {
+            showMsg("图片处理失败，请换一张", isError: true)
+            return
+        }
+        uploadingAvatar = true
+        message = ""
+        Task {
+            do {
+                let url = try await AccountApi.avatarUpload(base: base, token: settings.userToken, jpeg: jpeg)
+                await MainActor.run {
+                    uploadingAvatar = false
+                    settings.userAvatarUrl = url
+                    showMsg("✓ 头像已更新", isError: false)
+                }
+            } catch let e as AccountApi.ApiError {
+                await MainActor.run {
+                    uploadingAvatar = false
+                    showMsg("上传失败：\(AccountApi.ApiError.friendly(e))", isError: true)
+                }
+            } catch {
+                await MainActor.run {
+                    uploadingAvatar = false
+                    showMsg("上传失败：\(error.localizedDescription)", isError: true)
+                }
+            }
+        }
+    }
+
+    private func removeAvatar() {
+        let base = cloud.normalizedBaseURL
+        guard !base.isEmpty, settings.isUserLoggedIn else { return }
+        Task {
+            do {
+                try await AccountApi.avatarRemove(base: base, token: settings.userToken)
+                await MainActor.run {
+                    settings.userAvatarUrl = ""
+                    AvatarStore.shared.dropAll()
+                    showMsg("已移除头像，恢复默认", isError: false)
+                }
+            } catch {
+                await MainActor.run {
+                    showMsg("移除失败：\(error.localizedDescription)", isError: true)
+                }
+            }
+        }
+    }
 
     private var sessionSection: some View {
         Section {
@@ -97,7 +272,7 @@ struct AccountPage: View {
                     Label("同步授权", systemImage: "arrow.triangle.2.circlepath")
                     Spacer()
                     Text("重新上报本机档案并拉取最新授权状态")
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
             }
@@ -245,7 +420,7 @@ struct AccountPage: View {
     private var hintSection: some View {
         Section {
             Text("激活码与用户绑定，数据与设备绑定：换新车或重装 App，登录同一账号就能认回这辆车的历史数据。新注册账号自动获得 7 天免费试用。")
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundColor(.secondary)
         }
     }
@@ -329,6 +504,10 @@ struct AccountPage: View {
                 if let u = me["user"] as? [String: Any],
                    let nk = u["nickname"] as? String {
                     settings.userNickname = nk
+                }
+                if let u = me["user"] as? [String: Any],
+                   let au = (u["avatarUrl"] as? String) ?? (u["avatar_url"] as? String), !au.isEmpty {
+                    settings.userAvatarUrl = au
                 }
                     var boundName = ""
                     var authExpires = ""
@@ -473,6 +652,8 @@ struct AccountPage: View {
         settings.userNickname = ""
         settings.userTrialDays = 0
         settings.boundVehicle = ""
+        settings.userAvatarUrl = ""
+        AvatarStore.shared.dropAll()
         message = ""
         registerMode = false
     }
