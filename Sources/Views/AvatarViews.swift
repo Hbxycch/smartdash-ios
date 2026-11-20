@@ -2,21 +2,6 @@ import SwiftUI
 import UIKit
 import PhotosUI
 
-/// 整屏压暗 + 圆形镂空（even-odd），用于头像圆形裁剪页聚焦可视区
-struct DimWithHole: Shape {
-    let holeCenter: CGPoint
-    let holeRadius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.addRect(rect)
-        p.addEllipse(in: CGRect(x: holeCenter.x - holeRadius,
-                                y: holeCenter.y - holeRadius,
-                                width: holeRadius * 2, height: holeRadius * 2))
-        return p
-    }
-}
-
 /// 品牌青（对齐 Android #00E5FF）；iOS 16 不能用系统 .cyan（色相不同）与 ShapeStyle.opacity
 extension Color {
     static let brandCyan = Color(red: 0, green: 0.898, blue: 1.0)
@@ -129,9 +114,16 @@ struct AvatarCropSheet: View {
                     // 圆外压暗：整屏矩形 + 圆形镂空（even-odd）。
                     // 注意不能用 Path 直接链式 fill——Path 自己的 fill(FillStyle) 成员
                     // 会遮蔽 Shape.fill(_:style:) 导致重载歧义；自定义 Shape 无此问题。
-                    DimWithHole(holeCenter: CGPoint(x: cx, y: cy),
-                                holeRadius: cropSize / 2)
-                        .fill(Color.black.opacity(0.55), style: FillStyle(evenOdd: true))
+                    // 圆外压暗：Canvas even-odd 填充（ctx.fill(_:with:fillStyle:) 无重载歧义）。
+                    // 注意不能用 .fill(_, style:) 链式调用——runner SDK 上解析为 extra argument 'evenOdd'
+                    Canvas { ctx, size in
+                        var p = Path()
+                        p.addRect(CGRect(origin: .zero, size: size))
+                        p.addEllipse(in: CGRect(x: cx - cropSize / 2, y: cy - cropSize / 2,
+                                                width: cropSize, height: cropSize))
+                        ctx.fill(p, with: .color(Color.black.opacity(0.55)),
+                                 fillStyle: FillStyle(evenOdd: true))
+                    }
 
                     Circle()
                         .stroke(Color.brandCyan, lineWidth: 2.5)
