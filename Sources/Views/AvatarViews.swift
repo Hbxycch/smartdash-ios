@@ -114,15 +114,16 @@ struct AvatarCropSheet: View {
                     // 圆外压暗：整屏矩形 + 圆形镂空（even-odd）。
                     // 注意不能用 Path 直接链式 fill——Path 自己的 fill(FillStyle) 成员
                     // 会遮蔽 Shape.fill(_:style:) 导致重载歧义；自定义 Shape 无此问题。
-                    // 圆外压暗：Canvas even-odd 填充（ctx.fill(_:with:fillStyle:) 无重载歧义）。
-                    // 注意不能用 .fill(_, style:) 链式调用——runner SDK 上解析为 extra argument 'evenOdd'
+                    // 圆外压暗：Canvas 画 4 块矩形拼出圆孔（上下左右）。
+                    // 不用 even-odd / FillStyle——runner SDK 上 fill(style:)/fillStyle: 均报 extra argument
                     Canvas { ctx, size in
-                        var p = Path()
-                        p.addRect(CGRect(origin: .zero, size: size))
-                        p.addEllipse(in: CGRect(x: cx - cropSize / 2, y: cy - cropSize / 2,
-                                                width: cropSize, height: cropSize))
-                        ctx.fill(p, with: .color(Color.black.opacity(0.55)),
-                                 fillStyle: FillStyle(evenOdd: true))
+                        let r = cropSize / 2
+                        let dark = Color.black.opacity(0.55)
+                        let w = size.width, h = size.height
+                        ctx.fill(Path(CGRect(x: 0, y: 0, width: w, height: max(0, cy - r))), with: .color(dark))
+                        ctx.fill(Path(CGRect(x: 0, y: cy + r, width: w, height: max(0, h - cy - r))), with: .color(dark))
+                        ctx.fill(Path(CGRect(x: 0, y: cy - r, width: max(0, cx - r), height: cropSize)), with: .color(dark))
+                        ctx.fill(Path(CGRect(x: cx + r, y: cy - r, width: max(0, w - cx - r), height: cropSize)), with: .color(dark))
                     }
 
                     Circle()
