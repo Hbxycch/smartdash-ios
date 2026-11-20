@@ -112,12 +112,15 @@ struct AvatarCropSheet: View {
                         .gesture(dragGesture.simultaneously(with: pinchGesture))
 
                     // 圆外压暗：整屏矩形 + 圆形镂空（even-odd）
+                    // Path 自身的 fill(FillStyle) 成员会遮蔽 Shape.fill(_:style:)，
+                    // 必须两步：先 Path.fill(FillStyle) 得到镂空路径，再作为 Shape 填色
                     Path { p in
                         p.addRect(CGRect(origin: .zero, size: geo.size))
                         p.addEllipse(in: CGRect(x: cx - cropSize / 2, y: cy - cropSize / 2,
                                                 width: cropSize, height: cropSize))
                     }
-                    .fill(Color.black.opacity(0.55), style: FillStyle(evenOdd: true))
+                    .fill(FillStyle(evenOdd: true))
+                    .fill(Color.black.opacity(0.55))
 
                     Circle()
                         .stroke(Color.brandCyan, lineWidth: 2.5)
