@@ -2,6 +2,21 @@ import SwiftUI
 import UIKit
 import PhotosUI
 
+/// 整屏压暗 + 圆形镂空（even-odd），用于头像圆形裁剪页聚焦可视区
+struct DimWithHole: Shape {
+    let holeCenter: CGPoint
+    let holeRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.addRect(rect)
+        p.addEllipse(in: CGRect(x: holeCenter.x - holeRadius,
+                                y: holeCenter.y - holeRadius,
+                                width: holeRadius * 2, height: holeRadius * 2))
+        return p
+    }
+}
+
 /// 品牌青（对齐 Android #00E5FF）；iOS 16 不能用系统 .cyan（色相不同）与 ShapeStyle.opacity
 extension Color {
     static let brandCyan = Color(red: 0, green: 0.898, blue: 1.0)
@@ -111,16 +126,12 @@ struct AvatarCropSheet: View {
                         .position(x: cx, y: cy)
                         .gesture(dragGesture.simultaneously(with: pinchGesture))
 
-                    // 圆外压暗：整屏矩形 + 圆形镂空（even-odd）
-                    // Path 自身的 fill(FillStyle) 成员会遮蔽 Shape.fill(_:style:)，
-                    // 必须两步：先 Path.fill(FillStyle) 得到镂空路径，再作为 Shape 填色
-                    Path { p in
-                        p.addRect(CGRect(origin: .zero, size: geo.size))
-                        p.addEllipse(in: CGRect(x: cx - cropSize / 2, y: cy - cropSize / 2,
-                                                width: cropSize, height: cropSize))
-                    }
-                    .fill(FillStyle(evenOdd: true))
-                    .fill(Color.black.opacity(0.55))
+                    // 圆外压暗：整屏矩形 + 圆形镂空（even-odd）。
+                    // 注意不能用 Path 直接链式 fill——Path 自己的 fill(FillStyle) 成员
+                    // 会遮蔽 Shape.fill(_:style:) 导致重载歧义；自定义 Shape 无此问题。
+                    DimWithHole(holeCenter: CGPoint(x: cx, y: cy),
+                                holeRadius: cropSize / 2)
+                        .fill(Color.black.opacity(0.55), style: FillStyle(evenOdd: true))
 
                     Circle()
                         .stroke(Color.brandCyan, lineWidth: 2.5)
