@@ -58,9 +58,7 @@ struct BatteryPage: View {
                     Text("电池电量")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(p.textSecondary)
-                    Text(s.hasData
-                         ? (s.charging ? "充电中" : "放电中")
-                         : "未连接")
+                    Text(s.hasData ? s.flowText : "未连接")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(s.hasData ? (s.charging ? p.ok : p.accent) : p.textSecondary)
                     if r.socEstimated {

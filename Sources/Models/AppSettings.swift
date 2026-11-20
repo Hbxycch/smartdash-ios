@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 enum BatteryVendor: String, CaseIterable, Identifiable {
     case jikong
@@ -41,10 +42,11 @@ enum TabKind: String, CaseIterable, Identifiable {
 }
 
 enum MapTheme: String, CaseIterable, Identifiable {
-    case auto, day, night
+    case system, auto, day, night
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .system: return "跟随系统"
         case .auto: return "自动"
         case .day: return "白天"
         case .night: return "夜间"
@@ -100,6 +102,9 @@ final class AppSettings: ObservableObject {
 
     // ── 地图 ──
     @Published var mapTheme: MapTheme { didSet { d.set(mapTheme.rawValue, forKey: "map_theme") } }
+    /// 系统当前是否深色。App 主题是手动开关（preferredColorScheme 会覆盖窗口 trait），
+    /// 所以这里读 UIScreen 的系统级 trait，RootView 定时刷新，供地图「跟随系统」档使用。
+    @Published var systemDark: Bool = UIScreen.main.traitCollection.userInterfaceStyle == .dark
     @Published var headingUp: Bool { didSet { d.set(headingUp, forKey: "map_heading_up") } }
 
     // ── 仪表控制：样式 1（默认·地图+横排）/ 2（经典·三栏）/ 3（特斯拉·卡片）已实现，4（CarPlay）预留 ──
@@ -107,6 +112,8 @@ final class AppSettings: ObservableObject {
 
     // ── 控制器厂家 ──
     @Published var controllerVendor: ControllerVendor { didSet { d.set(controllerVendor.rawValue, forKey: "ctrl_vendor") } }
+    /// 控制器自动连接开关（对齐 Android v5.42：扫描页可切，持久化；默认开）
+    @Published var ctrlAutoConnect: Bool { didSet { d.set(ctrlAutoConnect, forKey: "ctrl_auto_connect") } }
 
     // ── 用户账号（注册/登录会话）──
     @Published var userToken: String { didSet { d.set(userToken, forKey: "user_token") } }
@@ -159,10 +166,11 @@ final class AppSettings: ObservableObject {
         showBattery = ud.object(forKey: "tab_battery") as? Bool ?? true
         showLocation = ud.object(forKey: "tab_location") as? Bool ?? true
         defaultTab = TabKind(rawValue: ud.string(forKey: "tab_default") ?? "") ?? .dashboard
-        mapTheme = MapTheme(rawValue: ud.string(forKey: "map_theme") ?? "") ?? .auto
+        mapTheme = MapTheme(rawValue: ud.string(forKey: "map_theme") ?? "") ?? .system
         headingUp = ud.object(forKey: "map_heading_up") as? Bool ?? true
         gaugeStyle = ud.object(forKey: "gauge_style") as? Int ?? 1
         controllerVendor = ControllerVendor(rawValue: ud.string(forKey: "ctrl_vendor") ?? "") ?? .fardriver
+        ctrlAutoConnect = ud.object(forKey: "ctrl_auto_connect") as? Bool ?? true
         userToken = ud.string(forKey: "user_token") ?? ""
         userName = ud.string(forKey: "user_name") ?? ""
         userNickname = ud.string(forKey: "user_nickname") ?? ""
@@ -198,6 +206,7 @@ final class AppSettings: ObservableObject {
         switch mapTheme {
         case .night: return true
         case .day: return false
+        case .system: return systemDark
         case .auto:
             let h = Calendar.current.component(.hour, from: Date())
             return h < 6 || h >= 18
@@ -205,6 +214,11 @@ final class AppSettings: ObservableObject {
     }
 
     var palette: Palette { Palette(dark: darkTheme) }
+
+    /// 刷新系统深浅色判定（RootView 进场与 60s 定时器调用）
+    func refreshSystemDark() {
+        systemDark = UIScreen.main.traitCollection.userInterfaceStyle == .dark
+    }
 
     // ── 背景图存取 ──
 

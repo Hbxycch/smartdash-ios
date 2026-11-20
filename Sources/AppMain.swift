@@ -11,6 +11,8 @@ struct SmartDashApp: App {
     @StateObject private var navi = NavigationController()
     @StateObject private var favorites = FavoriteStore()
     @StateObject private var cloud = CloudSync()
+    /// 车队房间协调器：App 级持有房间 VM，配合悬浮话筒（离开房间页不断链）
+    @StateObject private var fleetRoom = FleetRoomCoordinator()
 
     init() {
         // 崩溃捕获要最先装，装之前挂掉就什么都留不下
@@ -30,6 +32,7 @@ struct SmartDashApp: App {
                 .environmentObject(navi)
                 .environmentObject(favorites)
                 .environmentObject(cloud)
+                .environmentObject(fleetRoom)
                 .preferredColorScheme(settings.darkTheme ? .dark : .light)
         }
     }

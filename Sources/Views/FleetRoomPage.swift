@@ -109,6 +109,8 @@ final class FleetRoomVM: ObservableObject {
     private var chatFadeTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
     private var voiceReady = false
+    /// start() 是否已跑过：同房间再次进入（悬浮话筒返回）不重复建链
+    private(set) var started = false
 
     private var base = ""
     private var token = ""
@@ -119,6 +121,12 @@ final class FleetRoomVM: ObservableObject {
         self.base = base
         self.token = token
         roomCode = fleet["roomCode"] as? String ?? ""
+        // 同房间再次进入：只刷新成员快照，链路保持不动（对齐悬浮话筒语义）
+        if started {
+            applyMembers(fleet["members"] as? [[String: Any]] ?? [])
+            return
+        }
+        started = true
         fleetName = fleet["name"] as? String ?? ""
         meId = fleet["meId"] as? Int ?? 0
         myRole = fleet["myRole"] as? String ?? "member"
@@ -138,6 +146,7 @@ final class FleetRoomVM: ObservableObject {
         voice.disconnect()
         chatFadeTask?.cancel()
         toastTask?.cancel()
+        started = false
     }
 
     // MARK: WS
@@ -251,6 +260,7 @@ final class FleetRoomVM: ObservableObject {
     // MARK: 语音
 
     private func connectVoice() async {
+        statusChip = "语音连接中…"
         do {
             let vt = try await AccountApi.fleetVoiceToken(base: base, token: token)
             guard let url = vt["url"] as? String, let tk = vt["token"] as? String else {
@@ -261,6 +271,9 @@ final class FleetRoomVM: ObservableObject {
                 voice.connect(url: url, token: tk) { [weak self] err in
                     if let err {
                         self?.statusChip = "语音不可用：\(err)"
+                    } else {
+                        // 成功：清掉异常/进度提示（对齐 Android v5.46 重试链路）
+                        if let s = self?.statusChip, s.hasPrefix("语音") { self?.statusChip = "" }
                     }
                     cont.resume()
                 }
@@ -270,6 +283,11 @@ final class FleetRoomVM: ObservableObject {
         } catch {
             statusChip = "语音不可用：\(error.localizedDescription)"
         }
+    }
+
+    /// 「语音不可用」徽标点击重试（对齐 Android v5.46：可点击重新取 token 建链）
+    func retryVoice() {
+        Task { await connectVoice() }
     }
 
     func ptt(_ on: Bool) {
@@ -373,10 +391,12 @@ final class FleetRoomVM: ObservableObject {
 struct FleetRoomPage: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var cloud: CloudSync
+    @EnvironmentObject var coordinator: FleetRoomCoordinator
     @Environment(\.dismiss) private var dismiss
 
     let fleet: [String: Any]
-    @StateObject private var vm = FleetRoomVM()
+    /// 由 FleetRoomCoordinator 提供的 App 级 VM：离开页面不断链（悬浮话筒语义）
+    @ObservedObject var vm: FleetRoomVM
     @State private var chatInput = ""
     @State private var pttPressed = false
     @State private var micOpen = false
@@ -415,7 +435,8 @@ struct FleetRoomPage: View {
             Button("取消", role: .cancel) {}
         }
         .onAppear { primeAndStart() }
-        .onDisappear { vm.stop() }
+        // 离开页面不 stop()：链路（聊天/语音/位置）交给 FleetRoomCoordinator 继续，
+        // 主界面悬浮话筒可随时直达回来；只有退出/结束车队才 closeRoom
         .onReceive(vm.gps.$coordinate) { _ in vm.tickLocation() }
     }
 
@@ -457,7 +478,7 @@ struct FleetRoomPage: View {
             Spacer(minLength: 0)
 
             Button(role: .destructive) {
-                vm.stop()
+                coordinator.closeRoom()
                 dismiss()
             } label: {
                 Label("退出车队", systemImage: "arrow.backward.square")
@@ -576,6 +597,8 @@ struct FleetRoomPage: View {
                         chip(text: voiceChipText, icon: "mic.fill")
                         if !vm.statusChip.isEmpty {
                             chip(text: vm.statusChip, icon: "exclamationmark.triangle")
+                                // 状态徽标可点击：语音不可用时重试（对齐 Android v5.46）
+                                .onTapGesture { vm.retryVoice() }
                         }
                         Spacer()
                         // 行程小图标：点按展开/收起行程条（进行中亮红）

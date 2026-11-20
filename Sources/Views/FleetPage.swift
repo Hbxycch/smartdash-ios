@@ -6,6 +6,7 @@ import SwiftUI
 struct FleetPage: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var cloud: CloudSync
+    @EnvironmentObject var coordinator: FleetRoomCoordinator
 
     @State private var fleet: [String: Any]?
     @State private var newName = ""
@@ -15,6 +16,8 @@ struct FleetPage: View {
     @State private var messageIsError = false
     @State private var showLeaveConfirm = false
     @State private var showEndConfirm = false
+    /// 悬浮话筒「直达房间」的编程式推入
+    @State private var pushRoom = false
 
     var body: some View {
         Form {
@@ -28,7 +31,19 @@ struct FleetPage: View {
         }
         .navigationTitle("车队")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { refresh() }
+        .navigationDestination(isPresented: $pushRoom) {
+            if let f = fleet {
+                FleetRoomPage(fleet: f, vm: coordinator.roomVM(f))
+            }
+        }
+        .onAppear {
+            // 悬浮话筒请求直达房间：车队卡片已在就立即推入，否则等 refresh 拉到后再推
+            if coordinator.wantsRoomJump, fleet != nil {
+                coordinator.wantsRoomJump = false
+                pushRoom = true
+            }
+            refresh()
+        }
         .alert("退出车队", isPresented: $showLeaveConfirm) {
             Button("退出", role: .destructive) { leave() }
             Button("取消", role: .cancel) {}
@@ -86,7 +101,7 @@ struct FleetPage: View {
             }
 
             NavigationLink {
-                FleetRoomPage(fleet: f)
+                FleetRoomPage(fleet: f, vm: coordinator.roomVM(f))
             } label: {
                 Label("进入房间", systemImage: "dot.radiowaves.left.and.right")
                     .fontWeight(.semibold)
@@ -171,7 +186,14 @@ struct FleetPage: View {
         Task {
             do {
                 let r = try await AccountApi.fleetMine(base: base, token: settings.userToken)
-                await MainActor.run { fleet = r["fleet"] as? [String: Any] }
+                await MainActor.run {
+                    fleet = r["fleet"] as? [String: Any]
+                    // 悬浮话筒直达：拉到车队后立即推入房间页
+                    if coordinator.wantsRoomJump, fleet != nil {
+                        coordinator.wantsRoomJump = false
+                        pushRoom = true
+                    }
+                }
             } catch {
                 // 拉不到沿用当前显示
             }
@@ -252,7 +274,10 @@ struct FleetPage: View {
         Task {
             do {
                 _ = try await AccountApi.fleetLeave(base: base, token: settings.userToken)
-                await MainActor.run { fleet = nil }
+                await MainActor.run {
+                    coordinator.closeRoom()   // 悬浮话筒随之消失
+                    fleet = nil
+                }
             } catch let e as AccountApi.ApiError {
                 await MainActor.run { showMsg(AccountApi.ApiError.friendly(e), isError: true) }
             } catch {}
@@ -265,7 +290,10 @@ struct FleetPage: View {
         Task {
             do {
                 _ = try await AccountApi.fleetEnd(base: base, token: settings.userToken)
-                await MainActor.run { fleet = nil }
+                await MainActor.run {
+                    coordinator.closeRoom()   // 悬浮话筒随之消失
+                    fleet = nil
+                }
             } catch let e as AccountApi.ApiError {
                 await MainActor.run { showMsg(AccountApi.ApiError.friendly(e), isError: true) }
             } catch {}

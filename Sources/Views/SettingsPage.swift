@@ -415,7 +415,7 @@ struct SettingsPage: View {
             }
             .pickerStyle(.segmented)
             Toggle("车头朝上", isOn: $settings.headingUp)
-            Text("自动配色按本地时间切换：6:00–18:00 白天，其余夜间。")
+            Text("跟随系统：随系统深浅色切换底图（默认）。自动按本地时间切换：6:00–18:00 白天，其余夜间。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }

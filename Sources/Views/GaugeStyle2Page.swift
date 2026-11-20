@@ -187,7 +187,7 @@ struct GaugeStyle2Page: View {
 
     private var stateShort: String {
         if readout.totalVoltage <= 0.5 { return "--" }
-        return snap.charging ? "充" : (snap.current < -0.05 ? "放" : "静")
+        return snap.charging ? "充" : (abs(snap.current) > 0.05 ? "放" : "静")
     }
 
     // 便捷取值：总电压（含单体兜底换算）有效才认为「有数据在跑」
@@ -196,7 +196,7 @@ struct GaugeStyle2Page: View {
     private var stateColor: Color {
         if readout.totalVoltage <= 0.5 { return p.textSecondary }
         if snap.charging { return p.accent }
-        if snap.current < -0.05 { return p.ok }
+        if abs(snap.current) > 0.05 { return p.ok }
         return p.textSecondary
     }
 

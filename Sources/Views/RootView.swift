@@ -11,6 +11,7 @@ struct RootView: View {
     @EnvironmentObject var favorites: FavoriteStore
     @EnvironmentObject var cloud: CloudSync
     @EnvironmentObject var ctrl: ZhikeService
+    @EnvironmentObject var fleetRoom: FleetRoomCoordinator
 
     @State private var tab: TabKind = .dashboard
     @State private var showConnect = false
@@ -33,10 +34,20 @@ struct RootView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+
+            // 悬浮话筒（对齐 Android v5.46）：房间在后台运行时挂在主界面，点击直达房间页
+            if fleetRoom.inRoom {
+                FleetMicFloat {
+                    fleetRoom.wantsRoomJump = true
+                    showFleet = true
+                }
+            }
         }
         .onAppear {
             CrashLogger.mark("首屏出现 页签=\(tab.title)")
             tab = settings.startTab
+            // 地图「跟随系统」档：刷新系统深浅色判定（系统切换主题后最迟 60s 换底图）
+            settings.refreshSystemDark()
             UIApplication.shared.isIdleTimerDisabled = true
             location.start(enabled: settings.locationEnabled)
             cloud.start(bms: service, location: location, settings: settings)
@@ -45,19 +56,22 @@ struct RootView: View {
                 updater.check(manifestURL: settings.resolvedManifestURL,
                               currentBuild: UpdateChecker.currentBuild)
             }
-            // 控制器链路：错开 BMS 的连接高峰，稍晚一点用上次的 identifier 直连
+            // 控制器链路：错开 BMS 的连接高峰，稍晚一点用上次的 identifier 直连（受自动连接开关控制）
             if settings.controllerVendor == .zhike {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { ctrl.autoConnectIfSaved() }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                    if settings.ctrlAutoConnect { self.ctrl.autoConnectIfSaved() }
+                }
             }
             // 消息角标：进场先刷一次，之后 60s 轮询（反馈未读回复 + 公告未读）
             Task { await refreshMessagesBadge(settings: settings, cloud: cloud) }
         }
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+            settings.refreshSystemDark()
             Task { await refreshMessagesBadge(settings: settings, cloud: cloud) }
         }
         .onChange(of: settings.controllerVendor) { v in
             if v == .zhike {
-                ctrl.autoConnectIfSaved()
+                if settings.ctrlAutoConnect { ctrl.autoConnectIfSaved() }
             } else {
                 ctrl.disconnect()
             }
@@ -99,6 +113,7 @@ struct RootView: View {
                 FleetPage()
                     .environmentObject(settings)
                     .environmentObject(cloud)
+                    .environmentObject(fleetRoom)
             }
         }
         .sheet(isPresented: $showMessages) {

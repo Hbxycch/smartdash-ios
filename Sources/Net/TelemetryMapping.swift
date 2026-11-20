@@ -22,6 +22,9 @@ enum TelemetryMapping {
         if s.soh > 0 { m["soh"] = Double(s.soh) }
         if s.remainingAh > 0 { m["remain_ah"] = round(s.remainingAh, 1) }
         if s.cycles >= 0 { m["cycles"] = s.cycles }
+        // 蚂蚁/蚂蚁新版只给「累计循环容量 Ah」，没有循环次数（cycles 恒为 -1），
+        // 服务端用 cycle_ah 单独存，云端实时监控/BMS 分析页才能显示循环容量
+        if s.cycleCapacityAh > 0 { m["cycle_ah"] = round(s.cycleCapacityAh, 1) }
         if s.mosTemp.isFinite { m["mos_temp"] = round(s.mosTemp, 1) }
 
         let cells = s.activeCells

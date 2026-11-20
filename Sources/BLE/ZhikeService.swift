@@ -94,9 +94,12 @@ final class ZhikeService: NSObject, ObservableObject {
 
     /// 上次连过的设备 identifier，用于绕过扫描直接重连
     private let savedKey = "ctrl_peripheral_id"
+    /// 已保存的控制器 identifier（扫描页「断开」按钮显隐用；断开后仍保留，供自动重连）
+    @Published var savedId: String = ""
 
     override init() {
         super.init()
+        savedId = UserDefaults.standard.string(forKey: savedKey) ?? ""
         central = CBCentralManager(delegate: self, queue: .main)
     }
 
@@ -403,6 +406,7 @@ extension ZhikeService: CBCentralManagerDelegate {
         peripheral.delegate = self
         peripheral.discoverServices(nil)
         UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: savedKey)
+        savedId = peripheral.identifier.uuidString
     }
 
     func centralManager(_ central: CBCentralManager,

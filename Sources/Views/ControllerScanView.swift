@@ -3,13 +3,17 @@ import SwiftUI
 /// 控制器蓝牙连接页（整屏扫描，对应 Android 的 ControllerScanActivity）。
 ///
 /// 与 BMS 的连接页不同：这里列出**所有**能搜到的蓝牙设备（不只智科），
-/// 带信号柱 / dBm / 距离估算，按「仅智科」「强信号」筛选，点一行即连。
+/// 带信号柱 / dBm / 距离估算，按「仅智科」「强信号」筛选。
+/// 交互对齐 Android v5.42：点行只做「选中」（单选圆点，再点取消），
+/// 真正连接由顶栏「连接」按钮发起；带自动连接开关与断开按钮。
 struct ControllerScanView: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var ctrl: ZhikeService
     @Environment(\.dismiss) private var dismiss
 
     @State private var filter: CtrlFilter = .all
+    /// 列表里当前选中、等待点「连接」的设备（nil = 未选择）
+    @State private var selectedId: UUID? = nil
 
     private var p: Palette { settings.palette }
 
@@ -73,21 +77,44 @@ struct ControllerScanView: View {
 
             Spacer()
 
+            // 连接按钮：选中才可用（未选择时置灰显示「未选择」）
+            Button {
+                connectSelected()
+            } label: {
+                Label(selectedDev == nil ? "未选择" : "连接", systemImage: "link")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(selectedDev == nil ? p.textSecondary : p.bgDeep)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(
+                        Capsule().fill(selectedDev == nil ? p.panel : p.accent)
+                    )
+                    .overlay(Capsule().stroke(selectedDev == nil ? p.stroke : Color.clear, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedDev == nil)
+
             Button {
                 ctrl.startScan()
             } label: {
-                Label(ctrl.state == .scanning ? "重新扫描" : "扫描", systemImage: "arrow.clockwise")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(p.bgDeep)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(Capsule().fill(p.accent))
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(p.textPrimary)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(p.panel))
+                    .overlay(Circle().stroke(p.stroke, lineWidth: 1))
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(p.bg.opacity(0.9))
+    }
+
+    /// 当前选中的设备（已离场则视为未选择）
+    private var selectedDev: CtrlDevice? {
+        guard let id = selectedId else { return nil }
+        return ctrl.devices.first { $0.id == id }
     }
 
     private var statusText: String {
@@ -120,10 +147,18 @@ struct ControllerScanView: View {
                 }
                 .buttonStyle(.plain)
             }
-            Text("智科控制器名字通常含 GEKOO / 智科")
-                .font(.system(size: 11))
-                .foregroundColor(p.textSecondary.opacity(0.8))
             Spacer()
+            // 自动连接开关（对齐 Android v5.42：控制器自动连接，持久化，默认开）
+            Toggle(isOn: $settings.ctrlAutoConnect) {
+                Text("自动连接")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(p.textSecondary)
+            }
+            .toggleStyle(.switch)
+            .fixedSize()
+            .onChange(of: settings.ctrlAutoConnect) { on in
+                BtLog.ctrl("【自动连接】控制器自动连接 -> \(on ? "开" : "关")")
+            }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
@@ -164,11 +199,23 @@ struct ControllerScanView: View {
     }
 
     private func row(_ dev: CtrlDevice) -> some View {
-        Button {
-            BtLog.scan("选中控制器 \(dev.name) \(dev.idText)")
-            ctrl.connect(dev)
+        // 点行只做「选中」（再点一次取消），真正连接交给顶栏「连接」按钮
+        let selected = selectedId == dev.id
+        return Button {
+            if selected {
+                selectedId = nil
+                BtLog.scan("取消选中 \(dev.name) \(dev.idText)")
+            } else {
+                selectedId = dev.id
+                BtLog.scan("选中 \(dev.name) \(dev.idText)")
+            }
         } label: {
             HStack(spacing: 12) {
+                // 单选圆点
+                Image(systemName: selected ? "circle.inset.filled" : "circle")
+                    .font(.system(size: 16))
+                    .foregroundColor(selected ? p.accent : p.textSecondary.opacity(0.5))
+
                 CtrlSignalBars(rssi: dev.rssi,
                                tint: barColor(dev.rssi),
                                dim: p.track)
@@ -201,10 +248,6 @@ struct ControllerScanView: View {
                     Text("连接中…")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(p.warn)
-                } else {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(p.textSecondary.opacity(0.6))
                 }
             }
             .padding(.horizontal, 14)
@@ -215,7 +258,7 @@ struct ControllerScanView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isConnecting(dev) ? p.accent : p.stroke, lineWidth: 1)
+                    .stroke(isConnecting(dev) || selected ? p.accent : p.stroke, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -224,6 +267,16 @@ struct ControllerScanView: View {
     private func isConnecting(_ dev: CtrlDevice) -> Bool {
         guard case .connecting = ctrl.state else { return false }
         return ctrl.devices.contains { $0.id == dev.id }
+    }
+
+    /// 顶栏「连接」：一次写全连接意图，导出日志后单行即可还原「谁在什么时候连了什么」
+    private func connectSelected() {
+        guard let dev = selectedDev else {
+            BtLog.scan("【连接】点击「连接」但未选择设备 · 控制器")
+            return
+        }
+        BtLog.scan("【连接】点击「连接」· 控制器 · 选中 \(dev.name) \(dev.idText) rssi=\(dev.rssi)")
+        ctrl.connect(dev)
     }
 
     private func barColor(_ rssi: Int) -> Color {
@@ -239,9 +292,24 @@ struct ControllerScanView: View {
         HStack(spacing: 8) {
             Image(systemName: "info.circle")
                 .font(.system(size: 11))
-            Text("点设备即连接；连上后会自动回到仪表。若列表里没有智科控制器，确认控制器通电且没被其他手机占用。")
+            Text("点选设备后点右上「连接」；开启「自动连接」后下次启动自动连上次的控制器。")
                 .font(.system(size: 11))
             Spacer()
+            // 断开：有保存/在连的控制器才露出（对齐 Android v5.42；断开后保留 identifier 供自动重连）
+            if !ctrl.savedId.isEmpty {
+                Button {
+                    BtLog.scan("【断开】扫描页：请求断开当前控制器 \(ctrl.savedId.prefix(8))")
+                    ctrl.disconnect()
+                } label: {
+                    Label("断开", systemImage: "wifi.slash")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(p.danger)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Capsule().stroke(p.danger.opacity(0.5), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
         }
         .foregroundColor(p.textSecondary.opacity(0.85))
         .padding(.horizontal, 16)

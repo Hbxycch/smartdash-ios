@@ -182,7 +182,12 @@ final class AntBmsParser {
         let soc = u16(f, 42 + o2)
         if soc >= 0 && soc <= 100 { snapshot.soc = Double(soc) }
         snapshot.soh = u16(f, 44 + o2)
-        snapshot.charging = snapshot.current > 0.05
+        // 充放电判定：蚂蚁的电流约定是「充电为负、放电为正」（官方手册第 16 条），
+        // 与 JK 相反。状态字节（f[7]：1静置 2充电 3放电 4待机 5故障）是 BMS
+        // 自判的结果，比电流符号可靠，优先用它；状态字节异常时才按电流兜底。
+        let st = Int(f[7])
+        snapshot.charging = st == 0x02
+            || (st != 0x03 && st != 0x01 && st != 0x04 && snapshot.current < -0.05)
 
         let chargeMos = Int(f[46 + o2])
         let dischargeMos = Int(f[47 + o2])

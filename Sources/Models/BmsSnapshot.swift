@@ -63,10 +63,13 @@ struct BmsSnapshot {
 
     var powerW: Double { totalVoltage * abs(current) }
 
-    /// 放电/充电/静置
+    /// 充放状态：蚂蚁等协议直出 BMS 自判 statusText（充电中/放电中/静置/待机/故障），优先用；
+    /// JK 等无此字段的协议按解析层 charging 标志 + 电流幅值兜底（charging 的符号约定
+    /// 已在各解析层处理：JK 正=充电、蚂蚁充电为负，这里不重复判符号）。
     var flowText: String {
-        if current > 0.05 { return "充电中" }
-        if current < -0.05 { return "放电中" }
+        if !statusText.isEmpty && statusText != "--" { return statusText }
+        if charging { return "充电中" }
+        if abs(current) > 0.05 { return "放电中" }
         return "静置"
     }
 
